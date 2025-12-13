@@ -4,7 +4,7 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["libxcrypt", "openssl", "sqlite", "zlib"]
+packages = ["libxcrypt", "openssl", "postgresql", "sqlite", "zlib"]
 
 [workflows]
 runButton = "Project"
