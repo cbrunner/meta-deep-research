@@ -1,7 +1,8 @@
 import os
 import asyncio
 import uuid
-from typing import TypedDict, Optional
+import re
+from typing import TypedDict, Optional, List
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, Response, Request
@@ -43,10 +44,11 @@ class SubAgentState(TypedDict):
     job_id: Optional[str]
     output: Optional[str]
     error: Optional[str]
+    citations: Optional[List[dict]]
 
 
 def create_default_subagent_state() -> SubAgentState:
-    return {"status": "idle", "job_id": None, "output": None, "error": None}
+    return {"status": "idle", "job_id": None, "output": None, "error": None, "citations": None}
 
 
 class MetaResearchState(TypedDict):
@@ -57,6 +59,27 @@ class MetaResearchState(TypedDict):
     perplexity_data: SubAgentState
     consensus_report: Optional[str]
     overall_status: str
+    citations: Optional[List[dict]]
+
+
+def extract_citations_from_markdown(text: str, source_agent: str) -> List[dict]:
+    """Extract [title](url) markdown links from text."""
+    if not text:
+        return []
+    pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+    matches = re.findall(pattern, text)
+    citations = []
+    seen_urls = set()
+    for title, url in matches:
+        url = url.strip()
+        if url.startswith(('http://', 'https://')) and url not in seen_urls:
+            seen_urls.add(url)
+            citations.append({
+                "title": title.strip(),
+                "url": url,
+                "source_agent": source_agent
+            })
+    return citations
 
 
 async def get_supervisor_config() -> Optional[SupervisorConfig]:
@@ -185,7 +208,9 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
             if result.status == "completed":
                 gemini_data["status"] = "completed"
                 gemini_data["output"] = result.outputs[-1].text if result.outputs else "No output received"
+                gemini_data["citations"] = extract_citations_from_markdown(gemini_data["output"], "Gemini")
                 print(f"[GEMINI] OUTPUT length: {len(gemini_data['output'])} chars")
+                print(f"[GEMINI] Citations extracted: {len(gemini_data['citations'])}")
                 print(f"[GEMINI] OUTPUT preview: {gemini_data['output'][:500]}{'...' if len(gemini_data['output']) > 500 else ''}")
                 break
             elif result.status in ["failed", "cancelled"]:
@@ -263,7 +288,9 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
         if output:
             openai_data["status"] = "completed"
             openai_data["output"] = output
+            openai_data["citations"] = extract_citations_from_markdown(output, "OpenAI")
             print(f"[OPENAI] OUTPUT length: {len(output)} chars")
+            print(f"[OPENAI] Citations extracted: {len(openai_data['citations'])}")
             print(f"[OPENAI] OUTPUT preview: {output[:500]}{'...' if len(output) > 500 else ''}")
         else:
             openai_data["status"] = "failed"
@@ -320,8 +347,30 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
             perplexity_data["status"] = "completed"
             perplexity_data["output"] = data["choices"][0]["message"]["content"]
             perplexity_data["job_id"] = data.get("id", str(uuid.uuid4()))[:8]
+            
+            # Extract citations from Perplexity API response and markdown
+            api_citations = data.get("citations", [])
+            perplexity_citations = []
+            seen_urls = set()
+            for i, url in enumerate(api_citations):
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    perplexity_citations.append({
+                        "title": f"Source {i+1}",
+                        "url": url,
+                        "source_agent": "Perplexity"
+                    })
+            # Also extract markdown citations
+            md_citations = extract_citations_from_markdown(perplexity_data["output"], "Perplexity")
+            for c in md_citations:
+                if c["url"] not in seen_urls:
+                    seen_urls.add(c["url"])
+                    perplexity_citations.append(c)
+            perplexity_data["citations"] = perplexity_citations
+            
             print(f"[PERPLEXITY] Response received, id: {perplexity_data['job_id']}")
             print(f"[PERPLEXITY] OUTPUT length: {len(perplexity_data['output'])} chars")
+            print(f"[PERPLEXITY] Citations extracted: {len(perplexity_data['citations'])} (API: {len(api_citations)}, MD: {len(md_citations)})")
             print(f"[PERPLEXITY] OUTPUT preview: {perplexity_data['output'][:500]}{'...' if len(perplexity_data['output']) > 500 else ''}")
             
     except Exception as e:
@@ -423,11 +472,39 @@ Format with clear headers, bullet points, and proper Markdown formatting."""
             print(f"[SYNTHESIZER] EXCEPTION: {type(e).__name__}: {str(e)}")
             consensus = f"# Meta-Deep Research Report\n\n**Query:** {state['user_query']}\n\n*Synthesis error: {str(e)}*\n\n---\n\n{combined_reports}"
     
+    # Collect and deduplicate citations from all agents
+    all_citations = []
+    seen_urls = {}
+    for agent_data, agent_name in [
+        (state["gemini_data"], "Gemini"),
+        (state["openai_data"], "OpenAI"),
+        (state["perplexity_data"], "Perplexity")
+    ]:
+        agent_citations = agent_data.get("citations") or []
+        for c in agent_citations:
+            url = c.get("url", "")
+            if url:
+                if url in seen_urls:
+                    # Merge source_agents for duplicates
+                    existing = seen_urls[url]
+                    if agent_name not in existing["source_agent"]:
+                        existing["source_agent"] = f"{existing['source_agent']}, {agent_name}"
+                else:
+                    citation_copy = {
+                        "title": c.get("title", "Untitled"),
+                        "url": url,
+                        "source_agent": agent_name
+                    }
+                    seen_urls[url] = citation_copy
+                    all_citations.append(citation_copy)
+    
+    print(f"[SYNTHESIZER] Total unique citations: {len(all_citations)}")
     print(f"[SYNTHESIZER] === SYNTHESIZER NODE END ===\n")
     return {
         **state,
         "consensus_report": consensus,
-        "overall_status": "completed"
+        "overall_status": "completed",
+        "citations": all_citations
     }
 
 
@@ -435,9 +512,9 @@ async def start_research_node(state: MetaResearchState) -> MetaResearchState:
     """Initialize research state after approval."""
     return {
         **state,
-        "gemini_data": {"status": "polling", "job_id": None, "output": None, "error": None},
-        "openai_data": {"status": "polling", "job_id": None, "output": None, "error": None},
-        "perplexity_data": {"status": "polling", "job_id": None, "output": None, "error": None},
+        "gemini_data": {"status": "polling", "job_id": None, "output": None, "error": None, "citations": None},
+        "openai_data": {"status": "polling", "job_id": None, "output": None, "error": None, "citations": None},
+        "perplexity_data": {"status": "polling", "job_id": None, "output": None, "error": None, "citations": None},
         "overall_status": "researching"
     }
 
@@ -920,7 +997,8 @@ async def get_status(run_id: str, user: User = Depends(get_current_user)):
                 "openai_data": research_state.values.get("openai_data", create_default_subagent_state()),
                 "perplexity_data": research_state.values.get("perplexity_data", create_default_subagent_state()),
                 "consensus_report": research_state.values.get("consensus_report"),
-                "overall_status": research_state.values.get("overall_status", "unknown")
+                "overall_status": research_state.values.get("overall_status", "unknown"),
+                "citations": research_state.values.get("citations", [])
             }
         
         plan_state = await plan_graph.aget_state(config)
@@ -933,7 +1011,8 @@ async def get_status(run_id: str, user: User = Depends(get_current_user)):
                 "openai_data": plan_state.values.get("openai_data", create_default_subagent_state()),
                 "perplexity_data": plan_state.values.get("perplexity_data", create_default_subagent_state()),
                 "consensus_report": plan_state.values.get("consensus_report"),
-                "overall_status": plan_state.values.get("overall_status", "unknown")
+                "overall_status": plan_state.values.get("overall_status", "unknown"),
+                "citations": plan_state.values.get("citations", [])
             }
         
         raise HTTPException(status_code=404, detail="Research job not found")
