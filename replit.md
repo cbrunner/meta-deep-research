@@ -71,6 +71,16 @@ Admins can configure:
 - **Supervisor Prompt**: Prompt template for research planning (use `{query}` placeholder)
 - **Synthesizer Model**: Model used to synthesize research reports (via OpenRouter)
 - **Synthesizer Prompt**: Prompt template for synthesizing consensus reports (use `{query}` for the original query and `{combined_reports}` for the agent reports)
+- **Show Live Agent Feeds**: Toggle to display real-time streaming updates from each research agent during research
+
+## Live Agent Status Streaming
+
+When enabled, the app displays real-time updates from each research agent:
+- **Gemini**: Shows research plan steps as a checklist with completion status
+- **OpenAI**: Shows reasoning output as a terminal-style scrolling log
+- **Perplexity**: Shows discovered sources with favicons and links
+
+The live feeds are displayed within each agent card during active research and remain visible even after an individual agent completes, as long as the overall research session is still in progress.
 
 Available models via OpenRouter:
 - google/gemini-3-pro-preview - Google Gemini 3 Pro Preview
