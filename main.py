@@ -1101,13 +1101,16 @@ async def health_check():
     }
 
 
+@app.get("/health")
+async def health():
+    """Quick health check endpoint for deployment."""
+    return {"status": "ok"}
+
+
 @app.get("/")
 async def root():
-    """Root endpoint - serves SPA index or returns health status."""
-    index_path = "client/dist/index.html"
-    if os.path.isfile(index_path):
-        return FileResponse(index_path)
-    return {"status": "ok"}
+    """Root endpoint - serves SPA index."""
+    return FileResponse("client/dist/index.html")
 
 
 app.mount("/assets", StaticFiles(directory="client/dist/assets"), name="assets")
