@@ -1,0 +1,39 @@
+I need to upgrade the "Meta-Deep Research" app to expose real-time, agent-specific status information in the existing three-column research view. Currently, the user just waits for the final result; I want them to see the agents "thinking" and "working" live.
+
+Please implement the following changes across the stack:
+
+### 1. Admin Configuration
+- Update the `SupervisorConfig` model (and database schema) to include a new boolean setting: `show_live_agent_feeds` (default: true).
+- Add a toggle for this setting in the Admin Settings UI (`client/src/App.tsx`).
+- If this setting is disabled, the UI should revert to the standard loading spinners.
+
+### 2. Backend Streaming (Python/LangGraph)
+Update `main.py` and the LangGraph nodes to stream intermediate metadata, not just the final generation.
+- **OpenAI o3 (via OpenRouter):** Capture and stream the `reasoning` or `thought` tokens provided by OpenRouter.
+- **Gemini Deep Research (Interactions API):** Capture the `planning` steps (the research plan) and current execution status (e.g., "Planning", "Searching", "Reading") if available in the streaming response.
+- **Perplexity (Sonar API):** Capture and stream the `citations` or URLs as they are discovered.
+
+Ensure these updates are pushed to the frontend via the existing streaming mechanism (likely Server-Sent Events or WebSocket, however currently implemented).
+
+### 3. Frontend UI (React/Tailwind)
+Enhance the `ResearchView` (or equivalent component rendering the 3 columns) to display this live data when the agents are running.
+
+**Column 1: Gemini Deep Research (The Planner)**
+- Implement a **"Live Research Plan"** component.
+- Display the generated research plan as a checklist.
+- As the agent progresses, visually mark items as "In Progress" or "Done" (if state allows) or simply show the list of tasks identified.
+
+**Column 2: OpenAI o3 (The Analyst)**
+- Implement a **"Reasoning Log"** component (Terminal style).
+- Display a scrolling log of the agent's "thoughts" or reasoning steps.
+- Use a collapsible accordion or a fixed-height scrollable window (e.g., `h-48 overflow-y-auto font-mono text-xs bg-gray-900 text-green-400`).
+- Auto-scroll to the newest log line.
+
+**Column 3: Perplexity (The Librarian)**
+- Implement a **"Live Sources"** component.
+- Display a dynamic list or "cloud" of citations/URLs as they are found.
+- Show the favicon or domain name for each source found during execution.
+
+### Technical Constraint
+- Ensure that the final report generation still works correctly after the streaming finishes.
+- Handle cases where an API might not return the expected metadata gracefully (fallback to a simple "Processing..." state).
