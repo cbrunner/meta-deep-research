@@ -79,9 +79,12 @@ Query: {query}
 Output a concise 2-3 sentence plan explaining how three parallel deep research agents (Gemini, OpenAI, Perplexity) should approach this query."""
     
     if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
+        print(f"[SUPERVISOR] OpenRouter not configured, using fallback plan")
         plan = f"Research plan for: {query}\n- Gather comprehensive data from Gemini Deep Research\n- Analyze with OpenAI Deep Research\n- Cross-reference with Perplexity Deep Research"
     else:
         try:
+            print(f"[SUPERVISOR] Calling OpenRouter with model: {model}")
+            print(f"[SUPERVISOR] Base URL: {AI_INTEGRATIONS_OPENROUTER_BASE_URL}")
             client = AsyncOpenAI(
                 api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
                 base_url=AI_INTEGRATIONS_OPENROUTER_BASE_URL
@@ -96,7 +99,11 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
                 }]
             )
             plan = response.choices[0].message.content or "Plan generation failed"
+            print(f"[SUPERVISOR] Response received, plan length: {len(plan)} chars")
+            if plan == "Plan generation failed":
+                print(f"[SUPERVISOR] WARNING: Response content was empty/None")
         except Exception as e:
+            print(f"[SUPERVISOR] ERROR: {type(e).__name__}: {str(e)}")
             plan = f"Research plan for: {query}\n- Gather comprehensive data from all three research engines\nError creating detailed plan: {str(e)}"
     
     return {
@@ -273,9 +280,11 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     model = config.synthesizer_model if config else "anthropic/claude-sonnet-4.5"
     
     if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
+        print(f"[SYNTHESIZER] OpenRouter not configured, using fallback synthesis")
         consensus = f"# Meta-Deep Research Consensus Report\n\n**Query:** {state['user_query']}\n\n---\n\n{combined_reports}"
     else:
         try:
+            print(f"[SYNTHESIZER] Calling OpenRouter with model: {model}")
             client = AsyncOpenAI(
                 api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
                 base_url=AI_INTEGRATIONS_OPENROUTER_BASE_URL
@@ -304,7 +313,9 @@ Format with clear headers, bullet points, and proper Markdown formatting."""
                 }]
             )
             consensus = response.choices[0].message.content or "Synthesis failed"
+            print(f"[SYNTHESIZER] Response received, consensus length: {len(consensus)} chars")
         except Exception as e:
+            print(f"[SYNTHESIZER] ERROR: {type(e).__name__}: {str(e)}")
             consensus = f"# Meta-Deep Research Report\n\n**Query:** {state['user_query']}\n\n*Synthesis error: {str(e)}*\n\n---\n\n{combined_reports}"
     
     return {
