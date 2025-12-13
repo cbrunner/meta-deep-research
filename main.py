@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -23,7 +23,7 @@ from openai import AsyncOpenAI
 from google import genai
 
 from datetime import datetime, timezone
-from database import init_db, get_db, User, SupervisorConfig, ResearchHistory, async_session
+from database import init_db, get_db, User, SupervisorConfig, ResearchHistory, async_session, engine
 from auth import (
     hash_password, verify_password, create_session, delete_session,
     get_current_user, get_current_user_optional, require_admin,
@@ -672,6 +672,9 @@ async def lifespan(app: FastAPI):
     
     await init_db()
     
+    async with engine.begin() as conn:
+        await conn.execute(text("ALTER TABLE supervisor_config ADD COLUMN IF NOT EXISTS agent_timeout_minutes INTEGER DEFAULT 120 NOT NULL"))
+    
     async with async_session() as db:
         await create_initial_admin(db)
         
@@ -744,6 +747,7 @@ class ConfigUpdateRequest(BaseModel):
     synthesizer_model: Optional[str] = None
     synthesizer_prompt: Optional[str] = None
     show_live_agent_feeds: Optional[bool] = None
+    agent_timeout_minutes: Optional[int] = None
 
 
 @app.post("/api/auth/register")
@@ -847,7 +851,8 @@ async def get_admin_config(user: User = Depends(require_admin), db: AsyncSession
         "supervisor_prompt": config.supervisor_prompt,
         "synthesizer_model": config.synthesizer_model,
         "synthesizer_prompt": config.synthesizer_prompt or "",
-        "show_live_agent_feeds": config.show_live_agent_feeds
+        "show_live_agent_feeds": config.show_live_agent_feeds,
+        "agent_timeout_minutes": config.agent_timeout_minutes
     }
 
 
@@ -874,6 +879,8 @@ async def update_admin_config(
         config.synthesizer_prompt = request.synthesizer_prompt
     if request.show_live_agent_feeds is not None:
         config.show_live_agent_feeds = request.show_live_agent_feeds
+    if request.agent_timeout_minutes is not None:
+        config.agent_timeout_minutes = request.agent_timeout_minutes
     
     config.updated_by = user.id
     await db.commit()
@@ -884,7 +891,8 @@ async def update_admin_config(
         "supervisor_prompt": config.supervisor_prompt,
         "synthesizer_model": config.synthesizer_model,
         "synthesizer_prompt": config.synthesizer_prompt or "",
-        "show_live_agent_feeds": config.show_live_agent_feeds
+        "show_live_agent_feeds": config.show_live_agent_feeds,
+        "agent_timeout_minutes": config.agent_timeout_minutes
     }
 
 
