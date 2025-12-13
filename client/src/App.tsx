@@ -644,7 +644,31 @@ function App() {
         </header>
         
         {!user ? (
-          <LoginForm onSuccess={setUser} />
+          <>
+            <div className="text-center py-8 mb-8">
+              <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+                Get comprehensive research results by querying three leading AI research engines simultaneously, then receive a synthesized consensus report.
+              </p>
+              <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+                <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
+                  <Sparkles className="w-10 h-10 text-blue-400 mx-auto mb-4" />
+                  <h3 className="font-semibold mb-2">Gemini Deep Research</h3>
+                  <p className="text-gray-400 text-sm">Google's advanced reasoning capabilities</p>
+                </div>
+                <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
+                  <Cpu className="w-10 h-10 text-green-400 mx-auto mb-4" />
+                  <h3 className="font-semibold mb-2">o3 Deep Research</h3>
+                  <p className="text-gray-400 text-sm">OpenAI's comprehensive deep research</p>
+                </div>
+                <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
+                  <Globe className="w-10 h-10 text-orange-400 mx-auto mb-4" />
+                  <h3 className="font-semibold mb-2">Perplexity Deep Research</h3>
+                  <p className="text-gray-400 text-sm">Real-time web research with citations</p>
+                </div>
+              </div>
+            </div>
+            <LoginForm onSuccess={setUser} />
+          </>
         ) : (
           <>
             {!runId && !pendingPlan && (
