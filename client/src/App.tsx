@@ -294,8 +294,8 @@ function App() {
                 <Sparkles className="w-6 h-6 text-purple-400" />
                 <h2 className="text-xl font-semibold text-purple-400">Research Plan Ready for Approval</h2>
               </div>
-              <div className="mb-6 p-4 bg-gray-900/50 rounded-lg">
-                <p className="text-gray-300 whitespace-pre-wrap">{pendingPlan.research_plan}</p>
+              <div className="mb-6 p-4 bg-gray-900/50 rounded-lg prose prose-invert prose-sm max-w-none">
+                <ReactMarkdown>{pendingPlan.research_plan}</ReactMarkdown>
               </div>
               <div className="flex items-center justify-end gap-4">
                 <button
