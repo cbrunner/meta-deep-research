@@ -96,6 +96,23 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class ResearchHistory(Base):
+    __tablename__ = "research_history"
+    
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    run_id = Column(String, unique=True, nullable=False, index=True)
+    query = Column(Text, nullable=False)
+    research_plan = Column(Text, nullable=True)
+    gemini_output = Column(Text, nullable=True)
+    openai_output = Column(Text, nullable=True)
+    perplexity_output = Column(Text, nullable=True)
+    consensus_report = Column(Text, nullable=True)
+    overall_status = Column(String, nullable=False, default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -19,7 +19,8 @@ import httpx
 from openai import AsyncOpenAI
 from google import genai
 
-from database import init_db, get_db, User, SupervisorConfig, async_session
+from datetime import datetime, timezone
+from database import init_db, get_db, User, SupervisorConfig, ResearchHistory, async_session
 from auth import (
     hash_password, verify_password, create_session, delete_session,
     get_current_user, get_current_user_optional, require_admin,
@@ -679,7 +680,7 @@ async def start_research_immediately(request: ResearchRequest, user: User = Depe
     try:
         await research_graph.aupdate_state(config, initial_state)
         
-        asyncio.create_task(run_research(run_id, initial_state, config))
+        asyncio.create_task(run_research(run_id, user.id, initial_state, config))
         
         return {
             "run_id": run_id,
@@ -712,7 +713,7 @@ async def approve_research(run_id: str, user: User = Depends(get_current_user)):
         approved_state = {**current_state, "overall_status": "approved"}
         await plan_graph.aupdate_state(config, approved_state)
         
-        asyncio.create_task(run_research(run_id, current_state, config))
+        asyncio.create_task(run_research(run_id, user.id, current_state, config))
         
         return {
             "run_id": run_id,
@@ -725,13 +726,59 @@ async def approve_research(run_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"Failed to approve research: {str(e)}")
 
 
-async def run_research(run_id: str, current_state: dict, config: dict):
+async def save_research_history(run_id: str, user_id: str, state: dict):
+    """Save completed research to history database."""
+    try:
+        async with async_session() as db:
+            existing = await db.execute(
+                select(ResearchHistory).where(ResearchHistory.run_id == run_id)
+            )
+            history = existing.scalar_one_or_none()
+            
+            gemini_data = state.get("gemini_data", {})
+            openai_data = state.get("openai_data", {})
+            perplexity_data = state.get("perplexity_data", {})
+            
+            if history:
+                history.research_plan = state.get("research_plan")
+                history.gemini_output = gemini_data.get("output")
+                history.openai_output = openai_data.get("output")
+                history.perplexity_output = perplexity_data.get("output")
+                history.consensus_report = state.get("consensus_report")
+                history.overall_status = state.get("overall_status", "unknown")
+                history.completed_at = datetime.now(timezone.utc)
+            else:
+                history = ResearchHistory(
+                    id=str(uuid.uuid4()),
+                    user_id=user_id,
+                    run_id=run_id,
+                    query=state.get("user_query", ""),
+                    research_plan=state.get("research_plan"),
+                    gemini_output=gemini_data.get("output"),
+                    openai_output=openai_data.get("output"),
+                    perplexity_output=perplexity_data.get("output"),
+                    consensus_report=state.get("consensus_report"),
+                    overall_status=state.get("overall_status", "unknown"),
+                    completed_at=datetime.now(timezone.utc)
+                )
+                db.add(history)
+            
+            await db.commit()
+    except Exception as e:
+        print(f"Error saving research history for {run_id}: {e}")
+
+
+async def run_research(run_id: str, user_id: str, current_state: dict, config: dict):
     """Run the research graph asynchronously."""
+    final_state = current_state
     try:
         async for event in research_graph.astream(current_state, config, stream_mode="values"):
-            pass
+            final_state = event
     except Exception as e:
         print(f"Research error for {run_id}: {e}")
+        final_state["overall_status"] = "failed"
+    
+    await save_research_history(run_id, user_id, final_state)
 
 
 @app.get("/api/status/{run_id}")
@@ -772,6 +819,72 @@ async def get_status(run_id: str, user: User = Depends(get_current_user)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching status: {str(e)}")
+
+
+@app.get("/api/research/history")
+async def get_research_history(
+    user: User = Depends(get_current_user),
+    limit: int = 20,
+    offset: int = 0
+):
+    """Get the user's research history, sorted by most recent first."""
+    async with async_session() as db:
+        result = await db.execute(
+            select(ResearchHistory)
+            .where(ResearchHistory.user_id == user.id)
+            .order_by(ResearchHistory.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        history_items = result.scalars().all()
+        
+        return {
+            "items": [
+                {
+                    "id": item.id,
+                    "run_id": item.run_id,
+                    "query": item.query,
+                    "overall_status": item.overall_status,
+                    "created_at": item.created_at.isoformat() if item.created_at else None,
+                    "completed_at": item.completed_at.isoformat() if item.completed_at else None
+                }
+                for item in history_items
+            ],
+            "limit": limit,
+            "offset": offset
+        }
+
+
+@app.get("/api/research/history/{history_id}")
+async def get_research_history_detail(
+    history_id: str,
+    user: User = Depends(get_current_user)
+):
+    """Get the full details of a specific research history item."""
+    async with async_session() as db:
+        result = await db.execute(
+            select(ResearchHistory)
+            .where(ResearchHistory.id == history_id)
+            .where(ResearchHistory.user_id == user.id)
+        )
+        item = result.scalar_one_or_none()
+        
+        if not item:
+            raise HTTPException(status_code=404, detail="Research history not found")
+        
+        return {
+            "id": item.id,
+            "run_id": item.run_id,
+            "query": item.query,
+            "research_plan": item.research_plan,
+            "gemini_output": item.gemini_output,
+            "openai_output": item.openai_output,
+            "perplexity_output": item.perplexity_output,
+            "consensus_report": item.consensus_report,
+            "overall_status": item.overall_status,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+            "completed_at": item.completed_at.isoformat() if item.completed_at else None
+        }
 
 
 @app.get("/api/health")

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save } from 'lucide-react'
+import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save, History, Clock, ChevronLeft } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import axios from 'axios'
 
@@ -42,6 +42,29 @@ interface AdminConfig {
   supervisor_model: string
   supervisor_prompt: string
   synthesizer_model: string
+}
+
+interface HistoryItem {
+  id: string
+  run_id: string
+  query: string
+  overall_status: string
+  created_at: string | null
+  completed_at: string | null
+}
+
+interface HistoryDetail {
+  id: string
+  run_id: string
+  query: string
+  research_plan: string | null
+  gemini_output: string | null
+  openai_output: string | null
+  perplexity_output: string | null
+  consensus_report: string | null
+  overall_status: string
+  created_at: string | null
+  completed_at: string | null
 }
 
 function AgentCard({ 
@@ -433,10 +456,228 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
   )
 }
 
+function HistoryPanel({ onClose }: { onClose: () => void }) {
+  const [items, setItems] = useState<HistoryItem[]>([])
+  const [selectedItem, setSelectedItem] = useState<HistoryDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const response = await axios.get('/api/research/history')
+        setItems(response.data.items)
+      } catch (err) {
+        if (axios.isAxiosError(err)) {
+          setError(err.response?.data?.detail || 'Failed to load history')
+        } else {
+          setError('Failed to load history')
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchHistory()
+  }, [])
+
+  const handleSelectItem = async (id: string) => {
+    setLoadingDetail(true)
+    setError(null)
+    try {
+      const response = await axios.get(`/api/research/history/${id}`)
+      setSelectedItem(response.data)
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.detail || 'Failed to load details')
+      } else {
+        setError('Failed to load details')
+      }
+    } finally {
+      setLoadingDetail(false)
+    }
+  }
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'N/A'
+    return new Date(dateStr).toLocaleString()
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-500/20 text-green-400'
+      case 'failed':
+        return 'bg-red-500/20 text-red-400'
+      default:
+        return 'bg-yellow-500/20 text-yellow-400'
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-gray-800 p-8 rounded-xl">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 rounded-xl border border-gray-700 max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-gray-700 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            {selectedItem && (
+              <button
+                onClick={() => setSelectedItem(null)}
+                className="text-gray-400 hover:text-white mr-2"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            )}
+            <History className="w-6 h-6 text-purple-400" />
+            <h2 className="text-xl font-semibold">
+              {selectedItem ? 'Research Details' : 'Research History'}
+            </h2>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto flex-1">
+          {error && (
+            <div className="p-4 bg-red-500/20 border border-red-500 rounded-lg text-red-400 mb-4">
+              {error}
+            </div>
+          )}
+
+          {loadingDetail && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+            </div>
+          )}
+
+          {!loadingDetail && selectedItem && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium text-gray-300 mb-2">Query</h3>
+                <p className="text-white bg-gray-700 p-4 rounded-lg">{selectedItem.query}</p>
+              </div>
+              
+              <div className="flex gap-4 text-sm text-gray-400">
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  Started: {formatDate(selectedItem.created_at)}
+                </div>
+                <div className="flex items-center gap-1">
+                  <CheckCircle className="w-4 h-4" />
+                  Completed: {formatDate(selectedItem.completed_at)}
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(selectedItem.overall_status)}`}>
+                  {selectedItem.overall_status}
+                </span>
+              </div>
+
+              {selectedItem.research_plan && (
+                <div>
+                  <h3 className="text-lg font-medium text-gray-300 mb-2">Research Plan</h3>
+                  <div className="bg-gray-700 p-4 rounded-lg prose prose-invert max-w-none">
+                    <ReactMarkdown>{selectedItem.research_plan}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+
+              {selectedItem.consensus_report && (
+                <div>
+                  <h3 className="text-lg font-medium text-gray-300 mb-2">Consensus Report</h3>
+                  <div className="bg-gray-700 p-4 rounded-lg prose prose-invert max-w-none max-h-96 overflow-y-auto">
+                    <ReactMarkdown>{selectedItem.consensus_report}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+
+              <details className="group">
+                <summary className="cursor-pointer text-gray-400 hover:text-white">
+                  View Individual Agent Reports
+                </summary>
+                <div className="mt-4 space-y-4">
+                  {selectedItem.gemini_output && (
+                    <div>
+                      <h4 className="text-md font-medium text-blue-400 mb-2">Gemini Output</h4>
+                      <div className="bg-gray-700 p-4 rounded-lg prose prose-invert max-w-none max-h-64 overflow-y-auto text-sm">
+                        <ReactMarkdown>{selectedItem.gemini_output}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                  {selectedItem.openai_output && (
+                    <div>
+                      <h4 className="text-md font-medium text-green-400 mb-2">OpenAI Output</h4>
+                      <div className="bg-gray-700 p-4 rounded-lg prose prose-invert max-w-none max-h-64 overflow-y-auto text-sm">
+                        <ReactMarkdown>{selectedItem.openai_output}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                  {selectedItem.perplexity_output && (
+                    <div>
+                      <h4 className="text-md font-medium text-orange-400 mb-2">Perplexity Output</h4>
+                      <div className="bg-gray-700 p-4 rounded-lg prose prose-invert max-w-none max-h-64 overflow-y-auto text-sm">
+                        <ReactMarkdown>{selectedItem.perplexity_output}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </details>
+            </div>
+          )}
+
+          {!loadingDetail && !selectedItem && (
+            <>
+              {items.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <History className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <p>No research history yet.</p>
+                  <p className="text-sm mt-2">Your completed research will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {items.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleSelectItem(item.id)}
+                      className="w-full text-left p-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium truncate">{item.query}</p>
+                          <div className="flex items-center gap-2 mt-2 text-sm text-gray-400">
+                            <Clock className="w-4 h-4" />
+                            {formatDate(item.created_at)}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs shrink-0 ${getStatusColor(item.overall_status)}`}>
+                          {item.overall_status}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [user, setUser] = useState<UserData | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [showAdminSettings, setShowAdminSettings] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   
   const [query, setQuery] = useState('')
   const [runId, setRunId] = useState<string | null>(null)
@@ -629,6 +870,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
       {showAdminSettings && <AdminSettings onClose={() => setShowAdminSettings(false)} />}
+      {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} />}
       
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <header className="mb-12">
@@ -642,6 +884,13 @@ function App() {
             
             {user && (
               <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setShowHistory(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  <History className="w-4 h-4" />
+                  History
+                </button>
                 {user.role === 'admin' && (
                   <button
                     onClick={() => setShowAdminSettings(true)}
