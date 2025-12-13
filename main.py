@@ -92,7 +92,7 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
             prompt = prompt_template.replace("{query}", query)
             response = await client.chat.completions.create(
                 model=model,
-                max_tokens=2000,
+                max_tokens=65536,
                 messages=[{
                     "role": "user",
                     "content": prompt
