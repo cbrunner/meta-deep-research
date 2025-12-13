@@ -11,7 +11,8 @@ This application provides a unified research orchestration system that:
    - **OpenAI o3 Deep Research** (`openai/o3-deep-research`) via OpenRouter
    - **Perplexity Deep Research** (`sonar-deep-research`) via Perplexity API
 3. Synthesizes the results into a consensus report using OpenRouter (configurable model)
-4. Allows users to download the final report as Markdown or PDF
+4. Collects and deduplicates citations from all research agents into a unified bibliography
+5. Allows users to download the final report (with citations) as Markdown or PDF
 
 ## Architecture
 
