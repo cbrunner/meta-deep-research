@@ -2,13 +2,15 @@ import os
 import asyncio
 import uuid
 import re
-from typing import TypedDict, Optional, List
+import json
+from typing import TypedDict, Optional, List, Dict, Any
 from contextlib import asynccontextmanager
+from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException, Depends, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -39,6 +41,43 @@ AI_INTEGRATIONS_OPENROUTER_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENROUTER
 POLL_INTERVAL = 30
 
 
+class LiveUpdate:
+    def __init__(self, agent: str, update_type: str, data: Any):
+        self.agent = agent
+        self.update_type = update_type
+        self.data = data
+        self.timestamp = asyncio.get_event_loop().time() if asyncio.get_event_loop().is_running() else 0
+
+
+live_updates_store: Dict[str, List[LiveUpdate]] = defaultdict(list)
+live_update_events: Dict[str, asyncio.Event] = {}
+
+
+def emit_live_update(run_id: str, agent: str, update_type: str, data: Any):
+    """Emit a live update for a specific research run."""
+    update = LiveUpdate(agent, update_type, data)
+    live_updates_store[run_id].append(update)
+    if run_id in live_update_events:
+        live_update_events[run_id].set()
+
+
+def get_live_updates(run_id: str, since_index: int = 0) -> List[Dict]:
+    """Get live updates for a run since a specific index."""
+    updates = live_updates_store.get(run_id, [])
+    return [
+        {"agent": u.agent, "type": u.update_type, "data": u.data}
+        for u in updates[since_index:]
+    ]
+
+
+def cleanup_live_updates(run_id: str):
+    """Clean up live updates for a completed run."""
+    if run_id in live_updates_store:
+        del live_updates_store[run_id]
+    if run_id in live_update_events:
+        del live_update_events[run_id]
+
+
 class SubAgentState(TypedDict):
     status: str
     job_id: Optional[str]
@@ -53,6 +92,7 @@ def create_default_subagent_state() -> SubAgentState:
 
 class MetaResearchState(TypedDict):
     user_query: str
+    run_id: Optional[str]
     research_plan: Optional[str]
     gemini_data: SubAgentState
     openai_data: SubAgentState
@@ -169,6 +209,7 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
 async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
     """Submit research job to Gemini Deep Research using Interactions API with polling."""
     query = state["user_query"]
+    run_id = state.get("run_id")
     gemini_data = state["gemini_data"].copy()
     
     print(f"\n{'='*60}")
@@ -177,9 +218,14 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
     print(f"[GEMINI] Model: deep-research-pro-preview-12-2025")
     print(f"{'='*60}")
     
+    if run_id:
+        emit_live_update(run_id, "gemini", "status", {"step": "starting", "message": "Initializing Gemini Deep Research..."})
+    
     if not GEMINI_API_KEY:
         gemini_data["status"] = "failed"
         gemini_data["error"] = "GEMINI_API_KEY not configured"
+        if run_id:
+            emit_live_update(run_id, "gemini", "error", {"message": "API key not configured"})
         print(f"[GEMINI] ERROR: GEMINI_API_KEY not configured")
         print(f"[GEMINI] === GEMINI NODE END ===\n")
         return {**state, "gemini_data": gemini_data}
@@ -187,6 +233,9 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         print(f"[GEMINI] Submitting to Interactions API...")
+        
+        if run_id:
+            emit_live_update(run_id, "gemini", "plan_step", {"step": "submitting", "message": "Submitting research query...", "completed": False})
         
         interaction = await client.aio.interactions.create(
             input=query,
@@ -199,11 +248,18 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
         gemini_data["job_id"] = interaction_id[:8] if interaction_id else str(uuid.uuid4())[:8]
         print(f"[GEMINI] Job submitted, interaction_id: {interaction_id}")
         
+        if run_id:
+            emit_live_update(run_id, "gemini", "plan_step", {"step": "submitting", "message": "Research query submitted", "completed": True})
+            emit_live_update(run_id, "gemini", "plan_step", {"step": "analyzing", "message": "Analyzing research scope...", "completed": False})
+        
         poll_count = 0
         while True:
             result = await client.aio.interactions.get(interaction_id)
             poll_count += 1
             print(f"[GEMINI] Poll #{poll_count}: status={result.status}")
+            
+            if run_id:
+                emit_live_update(run_id, "gemini", "progress", {"poll": poll_count, "status": result.status})
             
             if result.status == "completed":
                 gemini_data["status"] = "completed"
@@ -212,10 +268,16 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
                 print(f"[GEMINI] OUTPUT length: {len(gemini_data['output'])} chars")
                 print(f"[GEMINI] Citations extracted: {len(gemini_data['citations'])}")
                 print(f"[GEMINI] OUTPUT preview: {gemini_data['output'][:500]}{'...' if len(gemini_data['output']) > 500 else ''}")
+                if run_id:
+                    emit_live_update(run_id, "gemini", "plan_step", {"step": "analyzing", "message": "Analysis complete", "completed": True})
+                    emit_live_update(run_id, "gemini", "plan_step", {"step": "synthesizing", "message": "Report synthesized", "completed": True})
+                    emit_live_update(run_id, "gemini", "completed", {"citations_count": len(gemini_data["citations"])})
                 break
             elif result.status in ["failed", "cancelled"]:
                 gemini_data["status"] = "failed"
                 gemini_data["error"] = f"Gemini research {result.status}"
+                if run_id:
+                    emit_live_update(run_id, "gemini", "error", {"message": gemini_data["error"]})
                 print(f"[GEMINI] ERROR: {gemini_data['error']}")
                 break
             
@@ -224,6 +286,8 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
     except Exception as e:
         gemini_data["status"] = "failed"
         gemini_data["error"] = str(e)
+        if run_id:
+            emit_live_update(run_id, "gemini", "error", {"message": str(e)})
         print(f"[GEMINI] EXCEPTION: {type(e).__name__}: {str(e)}")
     
     print(f"[GEMINI] === GEMINI NODE END ===\n")
@@ -233,6 +297,7 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
 async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
     """Submit research job to OpenAI o3 Deep Research via OpenRouter."""
     query = state["user_query"]
+    run_id = state.get("run_id")
     openai_data = state["openai_data"].copy()
     
     print(f"\n{'='*60}")
@@ -241,20 +306,31 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
     print(f"[OPENAI] Model: openai/o3-deep-research (via OpenRouter)")
     print(f"{'='*60}")
     
+    if run_id:
+        emit_live_update(run_id, "openai", "status", {"step": "starting", "message": "Initializing OpenAI Deep Research..."})
+    
     if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
         openai_data["status"] = "failed"
         openai_data["error"] = "OpenRouter not configured"
+        if run_id:
+            emit_live_update(run_id, "openai", "error", {"message": "OpenRouter not configured"})
         print(f"[OPENAI] ERROR: OpenRouter not configured")
         print(f"[OPENAI] === OPENAI NODE END ===\n")
         return {**state, "openai_data": openai_data}
     
     try:
         print(f"[OPENAI] Sending request to OpenRouter...")
+        if run_id:
+            emit_live_update(run_id, "openai", "reasoning", {"message": "Connecting to OpenRouter API..."})
+        
         client = AsyncOpenAI(
             api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
             base_url=AI_INTEGRATIONS_OPENROUTER_BASE_URL,
             timeout=3600.0
         )
+        
+        if run_id:
+            emit_live_update(run_id, "openai", "reasoning", {"message": "Submitting deep research query..."})
         
         response = await client.chat.completions.create(
             model="openai/o3-deep-research",
@@ -269,15 +345,15 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
         print(f"[OPENAI] Response received, id: {response.id}")
         print(f"[OPENAI] finish_reason: {response.choices[0].finish_reason if response.choices else 'N/A'}")
         
-        # Extract content from response
+        if run_id:
+            emit_live_update(run_id, "openai", "reasoning", {"message": "Processing research response..."})
+        
         output = None
         if response.choices:
             choice = response.choices[0]
-            # Try content first
             if choice.message.content:
                 output = choice.message.content
                 print(f"[OPENAI] Got output from content field")
-            # Fallback to reasoning field for thinking models
             elif hasattr(choice.message, 'reasoning') and choice.message.reasoning:
                 output = choice.message.reasoning
                 print(f"[OPENAI] Got output from reasoning field")
@@ -292,15 +368,22 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
             print(f"[OPENAI] OUTPUT length: {len(output)} chars")
             print(f"[OPENAI] Citations extracted: {len(openai_data['citations'])}")
             print(f"[OPENAI] OUTPUT preview: {output[:500]}{'...' if len(output) > 500 else ''}")
+            if run_id:
+                emit_live_update(run_id, "openai", "reasoning", {"message": "Research complete. Extracting citations..."})
+                emit_live_update(run_id, "openai", "completed", {"citations_count": len(openai_data["citations"])})
         else:
             openai_data["status"] = "failed"
             openai_data["error"] = "No content returned from OpenAI deep research"
+            if run_id:
+                emit_live_update(run_id, "openai", "error", {"message": "No content returned"})
             print(f"[OPENAI] WARNING: No content found in response")
         
     except Exception as e:
         print(f"[OPENAI] EXCEPTION: {type(e).__name__}: {str(e)}")
         openai_data["status"] = "failed"
         openai_data["error"] = str(e)
+        if run_id:
+            emit_live_update(run_id, "openai", "error", {"message": str(e)})
     
     print(f"[OPENAI] === OPENAI NODE END ===\n")
     return {**state, "openai_data": openai_data}
@@ -309,6 +392,7 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
 async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
     """Submit research job to Perplexity Sonar Deep Research."""
     query = state["user_query"]
+    run_id = state.get("run_id")
     perplexity_data = state["perplexity_data"].copy()
     
     print(f"\n{'='*60}")
@@ -317,17 +401,25 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
     print(f"[PERPLEXITY] Model: sonar-deep-research")
     print(f"{'='*60}")
     
+    if run_id:
+        emit_live_update(run_id, "perplexity", "status", {"step": "starting", "message": "Initializing Perplexity Deep Research..."})
+    
     if not PERPLEXITY_API_KEY:
         perplexity_data["status"] = "failed"
         perplexity_data["error"] = "PERPLEXITY_API_KEY not configured"
+        if run_id:
+            emit_live_update(run_id, "perplexity", "error", {"message": "API key not configured"})
         print(f"[PERPLEXITY] ERROR: PERPLEXITY_API_KEY not configured")
         print(f"[PERPLEXITY] === PERPLEXITY NODE END ===\n")
         return {**state, "perplexity_data": perplexity_data}
     
     try:
         print(f"[PERPLEXITY] Sending request to Perplexity API...")
-        async with httpx.AsyncClient(timeout=600.0) as client:
-            response = await client.post(
+        if run_id:
+            emit_live_update(run_id, "perplexity", "source", {"url": "Searching the web...", "title": "Web Search"})
+        
+        async with httpx.AsyncClient(timeout=600.0) as http_client:
+            response = await http_client.post(
                 "https://api.perplexity.ai/chat/completions",
                 headers={
                     "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
@@ -348,7 +440,6 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
             perplexity_data["output"] = data["choices"][0]["message"]["content"]
             perplexity_data["job_id"] = data.get("id", str(uuid.uuid4()))[:8]
             
-            # Extract citations from Perplexity API response and markdown
             api_citations = data.get("citations", [])
             perplexity_citations = []
             seen_urls = set()
@@ -360,12 +451,16 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
                         "url": url,
                         "source_agent": "Perplexity"
                     })
-            # Also extract markdown citations
+                    if run_id:
+                        emit_live_update(run_id, "perplexity", "source", {"url": url, "title": f"Source {i+1}"})
+            
             md_citations = extract_citations_from_markdown(perplexity_data["output"], "Perplexity")
             for c in md_citations:
                 if c["url"] not in seen_urls:
                     seen_urls.add(c["url"])
                     perplexity_citations.append(c)
+                    if run_id:
+                        emit_live_update(run_id, "perplexity", "source", {"url": c["url"], "title": c["title"]})
             perplexity_data["citations"] = perplexity_citations
             
             print(f"[PERPLEXITY] Response received, id: {perplexity_data['job_id']}")
@@ -373,9 +468,14 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
             print(f"[PERPLEXITY] Citations extracted: {len(perplexity_data['citations'])} (API: {len(api_citations)}, MD: {len(md_citations)})")
             print(f"[PERPLEXITY] OUTPUT preview: {perplexity_data['output'][:500]}{'...' if len(perplexity_data['output']) > 500 else ''}")
             
+            if run_id:
+                emit_live_update(run_id, "perplexity", "completed", {"citations_count": len(perplexity_data["citations"])})
+            
     except Exception as e:
         perplexity_data["status"] = "failed"
         perplexity_data["error"] = str(e)
+        if run_id:
+            emit_live_update(run_id, "perplexity", "error", {"message": str(e)})
         print(f"[PERPLEXITY] EXCEPTION: {type(e).__name__}: {str(e)}")
     
     print(f"[PERPLEXITY] === PERPLEXITY NODE END ===\n")
@@ -835,12 +935,14 @@ async def create_research_plan(request: ResearchRequest, user: User = Depends(ge
     
     initial_state: MetaResearchState = {
         "user_query": request.query,
+        "run_id": run_id,
         "research_plan": None,
         "gemini_data": create_default_subagent_state(),
         "openai_data": create_default_subagent_state(),
         "perplexity_data": create_default_subagent_state(),
         "consensus_report": None,
-        "overall_status": "creating_plan"
+        "overall_status": "creating_plan",
+        "citations": None
     }
     
     config = {"configurable": {"thread_id": run_id}}
@@ -872,12 +974,14 @@ async def start_research_immediately(request: ResearchRequest, user: User = Depe
     
     initial_state: MetaResearchState = {
         "user_query": request.query,
+        "run_id": run_id,
         "research_plan": f"Direct research query: {request.query}",
-        "gemini_data": {"status": "polling", "job_id": None, "output": None, "error": None},
-        "openai_data": {"status": "polling", "job_id": None, "output": None, "error": None},
-        "perplexity_data": {"status": "polling", "job_id": None, "output": None, "error": None},
+        "gemini_data": {"status": "polling", "job_id": None, "output": None, "error": None, "citations": None},
+        "openai_data": {"status": "polling", "job_id": None, "output": None, "error": None, "citations": None},
+        "perplexity_data": {"status": "polling", "job_id": None, "output": None, "error": None, "citations": None},
         "consensus_report": None,
-        "overall_status": "researching"
+        "overall_status": "researching",
+        "citations": None
     }
     
     config = {"configurable": {"thread_id": run_id}}
@@ -1026,6 +1130,52 @@ async def get_status(run_id: str, user: User = Depends(get_current_user)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching status: {str(e)}")
+
+
+@app.get("/api/stream/{run_id}")
+async def stream_live_updates(run_id: str, request: Request):
+    """SSE endpoint for streaming live agent updates."""
+    
+    async def event_generator():
+        last_index = 0
+        live_update_events[run_id] = asyncio.Event()
+        
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                
+                updates = get_live_updates(run_id, last_index)
+                if updates:
+                    for update in updates:
+                        yield f"data: {json.dumps(update)}\n\n"
+                    last_index += len(updates)
+                
+                live_update_events[run_id].clear()
+                
+                try:
+                    await asyncio.wait_for(
+                        live_update_events[run_id].wait(),
+                        timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+                    
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if run_id in live_update_events:
+                del live_update_events[run_id]
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @app.get("/api/research/history")
