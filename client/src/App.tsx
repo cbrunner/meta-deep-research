@@ -1,11 +1,185 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save, History, Clock, ChevronLeft, Download, FileText } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save, History, Clock, ChevronLeft, Download, FileText, ExternalLink, Check, Circle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import axios from 'axios'
 import html2pdf from 'html2pdf.js'
 import SourcesList from './SourcesList'
 
 axios.defaults.withCredentials = true
+
+interface LiveUpdate {
+  agent: string
+  type: string
+  data: Record<string, unknown>
+  timestamp: string
+}
+
+interface PlanStep {
+  step: string
+  message: string
+  completed: boolean
+}
+
+interface SourceUpdate {
+  url: string
+  title: string
+}
+
+function LiveResearchPlan({ updates }: { updates: LiveUpdate[] }) {
+  const [steps, setSteps] = useState<PlanStep[]>([])
+  const [latestProgress, setLatestProgress] = useState<string | null>(null)
+  
+  useEffect(() => {
+    const newSteps: PlanStep[] = []
+    let progress: string | null = null
+    
+    updates.forEach(update => {
+      if (update.type === 'plan_step') {
+        const data = update.data as { step?: string; message?: string; completed?: boolean }
+        const existingIdx = newSteps.findIndex(s => s.step === data.step)
+        if (existingIdx >= 0) {
+          newSteps[existingIdx] = { 
+            step: data.step || '', 
+            message: data.message || '', 
+            completed: data.completed || false 
+          }
+        } else {
+          newSteps.push({ 
+            step: data.step || '', 
+            message: data.message || '', 
+            completed: data.completed || false 
+          })
+        }
+      } else if (update.type === 'progress') {
+        const data = update.data as { status?: string }
+        progress = data.status || null
+      }
+    })
+    
+    setSteps(newSteps)
+    setLatestProgress(progress)
+  }, [updates])
+  
+  if (steps.length === 0 && !latestProgress) {
+    return (
+      <div className="text-xs text-gray-500 italic">Waiting for research plan...</div>
+    )
+  }
+  
+  return (
+    <div className="mt-3 space-y-2">
+      {latestProgress && (
+        <div className="text-xs text-blue-400 mb-2 animate-pulse">{latestProgress}</div>
+      )}
+      {steps.map((step, idx) => (
+        <div key={idx} className="flex items-start gap-2 text-xs">
+          {step.completed ? (
+            <Check className="w-3 h-3 text-green-400 mt-0.5 shrink-0" />
+          ) : (
+            <Circle className="w-3 h-3 text-gray-500 mt-0.5 shrink-0" />
+          )}
+          <span className={step.completed ? 'text-gray-400 line-through' : 'text-gray-300'}>
+            {step.message || step.step}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ReasoningLog({ updates }: { updates: LiveUpdate[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [messages, setMessages] = useState<string[]>([])
+  
+  useEffect(() => {
+    const newMessages: string[] = []
+    updates.forEach(update => {
+      if (update.type === 'reasoning') {
+        const data = update.data as { message?: string }
+        if (data.message) newMessages.push(data.message)
+      }
+    })
+    setMessages(newMessages)
+  }, [updates])
+  
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [messages])
+  
+  if (messages.length === 0) {
+    return (
+      <div className="text-xs text-gray-500 italic">Waiting for reasoning output...</div>
+    )
+  }
+  
+  return (
+    <div 
+      ref={scrollRef}
+      className="mt-3 p-2 bg-gray-900 rounded-lg max-h-32 overflow-y-auto font-mono text-xs text-green-400"
+    >
+      {messages.map((msg, idx) => (
+        <div key={idx} className="mb-1 break-words">
+          <span className="text-green-600">&gt;</span> {msg}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LiveSources({ updates }: { updates: LiveUpdate[] }) {
+  const [sources, setSources] = useState<SourceUpdate[]>([])
+  
+  useEffect(() => {
+    const newSources: SourceUpdate[] = []
+    updates.forEach(update => {
+      if (update.type === 'source') {
+        const data = update.data as { url?: string; title?: string }
+        if (data.url && !newSources.find(s => s.url === data.url)) {
+          newSources.push({ url: data.url, title: data.title || data.url })
+        }
+      }
+    })
+    setSources(newSources)
+  }, [updates])
+  
+  const getDomain = (url: string) => {
+    try {
+      return new URL(url).hostname
+    } catch {
+      return url
+    }
+  }
+  
+  if (sources.length === 0) {
+    return (
+      <div className="text-xs text-gray-500 italic">Discovering sources...</div>
+    )
+  }
+  
+  return (
+    <div className="mt-3 space-y-1 max-h-32 overflow-y-auto">
+      {sources.map((source, idx) => (
+        <a
+          key={idx}
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 text-xs text-gray-300 hover:text-orange-400 transition-colors"
+        >
+          <img 
+            src={`https://www.google.com/s2/favicons?domain=${getDomain(source.url)}&sz=16`} 
+            alt="" 
+            className="w-3 h-3"
+          />
+          <span className="truncate flex-1">{source.title}</span>
+          <ExternalLink className="w-3 h-3 shrink-0 opacity-50" />
+        </a>
+      ))}
+    </div>
+  )
+}
 
 interface Citation {
   title: string
@@ -82,14 +256,24 @@ function AgentCard({
   name, 
   icon: Icon, 
   data, 
-  color 
+  color,
+  agentType,
+  liveUpdates,
+  showLiveFeed,
+  isResearchActive
 }: { 
   name: string
   icon: React.ComponentType<{ className?: string }>
   data: SubAgentState
   color: string
+  agentType?: 'gemini' | 'openai' | 'perplexity'
+  liveUpdates?: LiveUpdate[]
+  showLiveFeed?: boolean
+  isResearchActive?: boolean
 }) {
   const [showRaw, setShowRaw] = useState(false)
+  
+  const agentUpdates = liveUpdates?.filter(u => u.agent === agentType) || []
   
   const getStatusStyles = () => {
     switch (data.status) {
@@ -135,6 +319,23 @@ function AgentCard({
         return 'Unknown'
     }
   }
+  
+  const renderLiveFeed = () => {
+    if (!showLiveFeed) return null
+    if (data.status === 'idle') return null
+    if (!isResearchActive && agentUpdates.length === 0) return null
+    
+    switch (agentType) {
+      case 'gemini':
+        return <LiveResearchPlan updates={agentUpdates} />
+      case 'openai':
+        return <ReasoningLog updates={agentUpdates} />
+      case 'perplexity':
+        return <LiveSources updates={agentUpdates} />
+      default:
+        return null
+    }
+  }
 
   return (
     <div className={`rounded-xl border-2 p-4 transition-all duration-300 ${getStatusStyles()}`}>
@@ -160,6 +361,8 @@ function AgentCard({
       {data.error && (
         <p className="text-sm text-red-400 mt-2">{data.error}</p>
       )}
+      
+      {renderLiveFeed()}
       
       {data.status === 'completed' && data.output && (
         <div className="mt-3">
@@ -732,6 +935,9 @@ function App() {
   const [isStartingImmediate, setIsStartingImmediate] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  const [liveUpdates, setLiveUpdates] = useState<LiveUpdate[]>([])
+  const [showLiveFeed, setShowLiveFeed] = useState(true)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -796,6 +1002,49 @@ function App() {
     
     return () => clearInterval(interval)
   }, [isPolling, runId, pollStatus])
+
+  useEffect(() => {
+    if (!user) return
+    const fetchConfig = async () => {
+      try {
+        const response = await axios.get('/api/admin/config')
+        setShowLiveFeed(response.data.show_live_agent_feeds ?? true)
+      } catch {
+        setShowLiveFeed(true)
+      }
+    }
+    fetchConfig()
+  }, [user])
+
+  const lastRunIdRef = useRef<string | null>(null)
+  
+  useEffect(() => {
+    if (!isPolling || !runId || !showLiveFeed) return
+    
+    if (lastRunIdRef.current !== runId) {
+      setLiveUpdates([])
+      lastRunIdRef.current = runId
+    }
+    
+    const eventSource = new EventSource(`/api/stream/${runId}`)
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as LiveUpdate
+        setLiveUpdates(prev => [...prev, data])
+      } catch (err) {
+        console.error('Failed to parse SSE data:', err)
+      }
+    }
+    
+    eventSource.onerror = () => {
+      eventSource.close()
+    }
+    
+    return () => {
+      eventSource.close()
+    }
+  }, [isPolling, runId, showLiveFeed])
 
   const handleLogout = async () => {
     try {
@@ -899,6 +1148,7 @@ function App() {
     setPendingPlan(null)
     setIsPolling(false)
     setError(null)
+    setLiveUpdates([])
     localStorage.removeItem('meta_research_run_id')
     localStorage.removeItem('meta_research_pending_plan')
   }
@@ -1149,18 +1399,30 @@ function App() {
                     icon={Sparkles}
                     data={status.gemini_data} 
                     color="blue"
+                    agentType="gemini"
+                    liveUpdates={liveUpdates}
+                    showLiveFeed={showLiveFeed}
+                    isResearchActive={isPolling}
                   />
                   <AgentCard 
                     name="OpenAI Deep Research" 
                     icon={Cpu}
                     data={status.openai_data} 
                     color="green"
+                    agentType="openai"
+                    liveUpdates={liveUpdates}
+                    showLiveFeed={showLiveFeed}
+                    isResearchActive={isPolling}
                   />
                   <AgentCard 
                     name="Perplexity Deep Research" 
                     icon={Globe}
                     data={status.perplexity_data} 
                     color="orange"
+                    agentType="perplexity"
+                    liveUpdates={liveUpdates}
+                    showLiveFeed={showLiveFeed}
+                    isResearchActive={isPolling}
                   />
                 </div>
                 
