@@ -70,7 +70,7 @@ async def supervisor_node(state: MetaResearchState) -> MetaResearchState:
     query = state["user_query"]
     
     config = await get_supervisor_config()
-    model = config.supervisor_model if config else "anthropic/claude-sonnet-4"
+    model = config.supervisor_model if config else "anthropic/claude-sonnet-4.5"
     prompt_template = config.supervisor_prompt if config else """You are a research supervisor. Create a brief research plan for this query:
 
 Query: {query}
@@ -269,7 +269,7 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     combined_reports = "\n\n---\n\n".join(available_reports)
     
     config = await get_supervisor_config()
-    model = config.synthesizer_model if config else "anthropic/claude-sonnet-4"
+    model = config.synthesizer_model if config else "anthropic/claude-sonnet-4.5"
     
     if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
         consensus = f"# Meta-Deep Research Consensus Report\n\n**Query:** {state['user_query']}\n\n---\n\n{combined_reports}"

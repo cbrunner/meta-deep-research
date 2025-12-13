@@ -281,20 +281,14 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
   const [success, setSuccess] = useState(false)
 
   const AVAILABLE_MODELS = [
-    'anthropic/claude-sonnet-4',
-    'anthropic/claude-3.5-sonnet',
-    'anthropic/claude-3-opus',
-    'anthropic/claude-3-haiku',
-    'openai/gpt-4o',
-    'openai/gpt-4o-mini',
-    'openai/o1',
-    'openai/o1-mini',
-    'google/gemini-2.0-flash-exp',
-    'google/gemini-pro-1.5',
-    'meta-llama/llama-3.3-70b-instruct',
-    'mistralai/mistral-large',
-    'deepseek/deepseek-chat',
-    'qwen/qwen-2.5-72b-instruct'
+    { id: 'google/gemini-3-pro-preview', name: 'Google Gemini 3 Pro Preview' },
+    { id: 'google/gemini-2.5-pro', name: 'Google Gemini 2.5 Pro' },
+    { id: 'anthropic/claude-opus-4.5', name: 'Anthropic Claude 4.5 Opus' },
+    { id: 'anthropic/claude-sonnet-4.5', name: 'Anthropic Claude 4.5 Sonnet' },
+    { id: 'x-ai/grok-4.1-fast', name: 'xAI Grok 4.1 Fast' },
+    { id: 'x-ai/grok-4', name: 'xAI Grok 4' },
+    { id: 'openai/gpt-5.2', name: 'OpenAI GPT-5.2' },
+    { id: 'openai/o3', name: 'OpenAI o3' }
   ]
 
   useEffect(() => {
@@ -380,7 +374,7 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               {AVAILABLE_MODELS.map(model => (
-                <option key={model} value={model}>{model}</option>
+                <option key={model.id} value={model.id}>{model.name}</option>
               ))}
             </select>
             <p className="text-xs text-gray-500 mt-1">Model used to create research plans</p>
@@ -405,7 +399,7 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               {AVAILABLE_MODELS.map(model => (
-                <option key={model} value={model}>{model}</option>
+                <option key={model.id} value={model.id}>{model.name}</option>
               ))}
             </select>
             <p className="text-xs text-gray-500 mt-1">Model used to synthesize research reports</p>

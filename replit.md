@@ -69,17 +69,15 @@ Admins can configure:
 - **Supervisor Prompt**: Prompt template for research planning (use `{query}` placeholder)
 - **Synthesizer Model**: Model used to synthesize research reports (via OpenRouter)
 
-Available models via OpenRouter (examples):
-- anthropic/claude-sonnet-4 (default)
-- anthropic/claude-3.5-sonnet
-- anthropic/claude-3-opus
-- openai/gpt-4o
-- openai/o1
-- google/gemini-2.0-flash-exp
-- meta-llama/llama-3.3-70b-instruct
-- mistralai/mistral-large
-- deepseek/deepseek-chat
-- qwen/qwen-2.5-72b-instruct
+Available models via OpenRouter:
+- google/gemini-3-pro-preview - Google Gemini 3 Pro Preview
+- google/gemini-2.5-pro - Google Gemini 2.5 Pro
+- anthropic/claude-opus-4.5 - Anthropic Claude 4.5 Opus
+- anthropic/claude-sonnet-4.5 - Anthropic Claude 4.5 Sonnet (default)
+- x-ai/grok-4.1-fast - xAI Grok 4.1 Fast
+- x-ai/grok-4 - xAI Grok 4
+- openai/gpt-5.2 - OpenAI GPT-5.2
+- openai/o3 - OpenAI o3
 
 ## API Endpoints
 
