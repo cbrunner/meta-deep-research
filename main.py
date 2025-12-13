@@ -324,7 +324,7 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
             )
             response = await client.chat.completions.create(
                 model=model,
-                max_tokens=8192,
+                max_tokens=65536,
                 messages=[{
                     "role": "user",
                     "content": f"""You are a research synthesis expert. Analyze the following research reports from three different AI research agents and create a comprehensive consensus report.
