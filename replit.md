@@ -93,8 +93,13 @@ Available models via OpenRouter:
 
 ### Research (requires authentication)
 - `POST /api/research` - Create a research plan (requires approval)
+- `POST /api/research/immediate` - Start research immediately without planning
 - `POST /api/research/{run_id}/approve` - Approve plan and start research
 - `GET /api/status/{run_id}` - Poll research job status
+
+### History (requires authentication)
+- `GET /api/research/history` - Get user's research history (paginated, reverse chronological)
+- `GET /api/research/history/{id}` - Get full details of a specific research
 
 ### Other
 - `GET /api/health` - Health check with API key configuration status
