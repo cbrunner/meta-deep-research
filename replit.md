@@ -69,6 +69,7 @@ Admins can configure:
 - **Supervisor Model**: Model used to create research plans (via OpenRouter)
 - **Supervisor Prompt**: Prompt template for research planning (use `{query}` placeholder)
 - **Synthesizer Model**: Model used to synthesize research reports (via OpenRouter)
+- **Synthesizer Prompt**: Prompt template for synthesizing consensus reports (use `{query}` for the original query and `{combined_reports}` for the agent reports)
 
 Available models via OpenRouter:
 - google/gemini-3-pro-preview - Google Gemini 3 Pro Preview
