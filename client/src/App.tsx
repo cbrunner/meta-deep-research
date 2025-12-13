@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save, History, Clock, ChevronLeft } from 'lucide-react'
+import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save, History, Clock, ChevronLeft, Download, FileText } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import axios from 'axios'
+import html2pdf from 'html2pdf.js'
 
 axios.defaults.withCredentials = true
 
@@ -859,6 +860,35 @@ function App() {
     localStorage.removeItem('meta_research_pending_plan')
   }
 
+  const handleDownloadMarkdown = () => {
+    if (!status?.consensus_report) return
+    const blob = new Blob([status.consensus_report], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `research-report-${new Date().toISOString().split('T')[0]}.md`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadPDF = () => {
+    if (!status?.consensus_report) return
+    const element = document.getElementById('consensus-report-content')
+    if (!element) return
+    
+    const opt = {
+      margin: [10, 10, 10, 10] as [number, number, number, number],
+      filename: `research-report-${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+    }
+    
+    html2pdf().set(opt).from(element).save()
+  }
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white flex items-center justify-center">
@@ -1093,14 +1123,32 @@ function App() {
                         <CheckCircle className="w-6 h-6 text-green-500" />
                         Consensus Report
                       </h2>
-                      <button
-                        onClick={handleReset}
-                        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors"
-                      >
-                        New Research
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleDownloadMarkdown}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm transition-colors flex items-center gap-2"
+                          title="Download as Markdown"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Markdown
+                        </button>
+                        <button
+                          onClick={handleDownloadPDF}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm transition-colors flex items-center gap-2"
+                          title="Download as PDF"
+                        >
+                          <Download className="w-4 h-4" />
+                          PDF
+                        </button>
+                        <button
+                          onClick={handleReset}
+                          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors"
+                        >
+                          New Research
+                        </button>
+                      </div>
                     </div>
-                    <div className="prose prose-invert prose-lg max-w-none">
+                    <div id="consensus-report-content" className="prose prose-invert prose-lg max-w-none">
                       <ReactMarkdown>{status.consensus_report}</ReactMarkdown>
                     </div>
                   </div>
