@@ -16,7 +16,8 @@ This application provides a unified research orchestration system that:
 
 ### Backend (Python/FastAPI)
 - **Framework**: FastAPI with LangGraph StateGraph
-- **Persistence**: AsyncSqliteSaver with `replit_state.db`
+- **Database**: PostgreSQL for users, sessions, and configuration
+- **Persistence**: AsyncSqliteSaver with `replit_state.db` for LangGraph state
 - **Port**: 5000
 
 ### Frontend (React/Vite)
@@ -28,10 +29,12 @@ This application provides a unified research orchestration system that:
 ## Project Structure
 
 ```
-├── main.py                 # FastAPI server + LangGraph definition
+├── main.py                 # FastAPI server + LangGraph definition + auth endpoints
+├── database.py             # SQLAlchemy models (User, Session, SupervisorConfig)
+├── auth.py                 # Authentication utilities and dependencies
 ├── client/
 │   ├── src/
-│   │   ├── App.tsx        # Main React component
+│   │   ├── App.tsx        # Main React component with login UI + admin settings
 │   │   ├── index.css      # Tailwind imports
 │   │   └── main.tsx       # React entry point
 │   ├── dist/              # Built frontend (served by FastAPI)
@@ -41,19 +44,55 @@ This application provides a unified research orchestration system that:
 └── replit_state.db        # SQLite persistence (auto-created)
 ```
 
+## Authentication
+
+The app uses session-based authentication with signed cookies:
+
+- **Register**: POST /api/auth/register - Create new user account
+- **Login**: POST /api/auth/login - Authenticate with email/password
+- **Logout**: POST /api/auth/logout - End session
+- **Current User**: GET /api/auth/me - Get authenticated user info
+
+### User Roles
+- **user**: Regular user, can create and run research
+- **admin**: Can access admin settings to configure models and prompts
+
+### Initial Admin Setup
+Set these environment variables before starting to create the first admin:
+- `INITIAL_ADMIN_EMAIL`
+- `INITIAL_ADMIN_PASSWORD`
+
+## Admin Configuration
+
+Admins can configure:
+- **Supervisor Model**: Model used to create research plans
+- **Supervisor Prompt**: Prompt template for research planning (use `{query}` placeholder)
+- **Synthesizer Model**: Model used to synthesize research reports
+
+Available Claude models:
+- claude-sonnet-4-20250514 (default)
+- claude-3-5-sonnet-20241022
+- claude-3-opus-20240229
+- claude-3-haiku-20240307
+
 ## API Endpoints
 
+### Authentication
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login
+- `POST /api/auth/logout` - Logout
+- `GET /api/auth/me` - Get current user
+
+### Admin (requires admin role)
+- `GET /api/admin/config` - Get supervisor configuration
+- `PATCH /api/admin/config` - Update supervisor configuration
+
+### Research (requires authentication)
 - `POST /api/research` - Create a research plan (requires approval)
-  - Body: `{ "query": "your research question" }`
-  - Returns: `{ "run_id": "uuid", "status": "pending_approval", "research_plan": "...", "message": "..." }`
-
 - `POST /api/research/{run_id}/approve` - Approve plan and start research
-  - Returns: `{ "run_id": "uuid", "status": "started", "message": "..." }`
-  - Note: Can only be called once per plan (prevents duplicate approvals)
-
 - `GET /api/status/{run_id}` - Poll research job status
-  - Returns full state including agent statuses and consensus report
 
+### Other
 - `GET /api/health` - Health check with API key configuration status
 
 ## Two-Phase Research Flow
@@ -64,35 +103,21 @@ This application provides a unified research orchestration system that:
 
 ## Environment Variables Required
 
+- `DATABASE_URL` - PostgreSQL connection string
+- `SESSION_SECRET` - Secret for signing session cookies
 - `GEMINI_API_KEY` - Google Gemini API key
 - `OPENAI_API_KEY` - OpenAI API key  
 - `PERPLEXITY_API_KEY` - Perplexity API key
 - `ANTHROPIC_API_KEY` - Anthropic API key (for supervisor and synthesizer)
-
-## State Schema
-
-```python
-class SubAgentState(TypedDict):
-    status: str       # "idle", "polling", "completed", "failed"
-    job_id: Optional[str]
-    output: Optional[str]
-    error: Optional[str]
-
-class MetaResearchState(TypedDict):
-    user_query: str
-    research_plan: Optional[str]
-    gemini_data: SubAgentState
-    openai_data: SubAgentState
-    perplexity_data: SubAgentState
-    consensus_report: Optional[str]
-    overall_status: str
-```
+- `INITIAL_ADMIN_EMAIL` - (optional) Email for initial admin user
+- `INITIAL_ADMIN_PASSWORD` - (optional) Password for initial admin user
 
 ## Running the Application
 
-1. Set the required API keys as environment secrets
-2. The workflow runs `python main.py` which starts uvicorn on port 5000
-3. Frontend is pre-built and served from `client/dist/`
+1. Set the required API keys and database URL as environment secrets
+2. (Optional) Set INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD for admin access
+3. The workflow runs `python main.py` which starts uvicorn on port 5000
+4. Frontend is pre-built and served from `client/dist/`
 
 ## Development
 
