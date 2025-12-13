@@ -92,27 +92,38 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
             prompt = prompt_template.replace("{query}", query)
             response = await client.chat.completions.create(
                 model=model,
-                max_tokens=500,
+                max_tokens=2000,
                 messages=[{
                     "role": "user",
                     "content": prompt
                 }]
             )
-            print(f"[SUPERVISOR] Full response object: {response}")
             print(f"[SUPERVISOR] Response model: {response.model}")
             print(f"[SUPERVISOR] Choices count: {len(response.choices)}")
+            
+            plan = None
             if response.choices:
                 choice = response.choices[0]
                 print(f"[SUPERVISOR] Choice finish_reason: {choice.finish_reason}")
-                print(f"[SUPERVISOR] Choice message: {choice.message}")
-                print(f"[SUPERVISOR] Message content: {choice.message.content}")
-                print(f"[SUPERVISOR] Message content type: {type(choice.message.content)}")
-                if hasattr(choice.message, 'reasoning_content'):
-                    print(f"[SUPERVISOR] Reasoning content: {choice.message.reasoning_content}")
-            plan = response.choices[0].message.content or "Plan generation failed"
-            print(f"[SUPERVISOR] Final plan length: {len(plan)} chars")
-            if plan == "Plan generation failed":
-                print(f"[SUPERVISOR] WARNING: Response content was empty/None")
+                
+                # Try content first
+                if choice.message.content:
+                    plan = choice.message.content
+                    print(f"[SUPERVISOR] Got plan from content field")
+                # Fallback to reasoning field for thinking models
+                elif hasattr(choice.message, 'reasoning') and choice.message.reasoning:
+                    plan = choice.message.reasoning
+                    print(f"[SUPERVISOR] Got plan from reasoning field")
+                # Check reasoning_content as another fallback
+                elif hasattr(choice.message, 'reasoning_content') and choice.message.reasoning_content:
+                    plan = choice.message.reasoning_content
+                    print(f"[SUPERVISOR] Got plan from reasoning_content field")
+            
+            if not plan:
+                plan = "Plan generation failed - no content returned from model"
+                print(f"[SUPERVISOR] WARNING: No content found in response")
+            else:
+                print(f"[SUPERVISOR] Final plan length: {len(plan)} chars")
         except Exception as e:
             print(f"[SUPERVISOR] ERROR: {type(e).__name__}: {str(e)}")
             plan = f"Research plan for: {query}\n- Gather comprehensive data from all three research engines\nError creating detailed plan: {str(e)}"
