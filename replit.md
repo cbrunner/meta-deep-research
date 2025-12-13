@@ -43,14 +43,24 @@ This application provides a unified research orchestration system that:
 
 ## API Endpoints
 
-- `POST /api/research` - Start a new research job
+- `POST /api/research` - Create a research plan (requires approval)
   - Body: `{ "query": "your research question" }`
+  - Returns: `{ "run_id": "uuid", "status": "pending_approval", "research_plan": "...", "message": "..." }`
+
+- `POST /api/research/{run_id}/approve` - Approve plan and start research
   - Returns: `{ "run_id": "uuid", "status": "started", "message": "..." }`
+  - Note: Can only be called once per plan (prevents duplicate approvals)
 
 - `GET /api/status/{run_id}` - Poll research job status
   - Returns full state including agent statuses and consensus report
 
 - `GET /api/health` - Health check with API key configuration status
+
+## Two-Phase Research Flow
+
+1. **Plan Creation Phase**: User submits query, supervisor creates a research plan
+2. **Approval Phase**: User reviews the plan and clicks "Approve & Start Research" or "Cancel"
+3. **Research Phase**: All three agents run in parallel, results are synthesized into consensus report
 
 ## Environment Variables Required
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu } from 'lucide-react'
+import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import axios from 'axios'
 
@@ -19,6 +19,13 @@ interface ResearchStatus {
   perplexity_data: SubAgentState
   consensus_report: string | null
   overall_status: string
+}
+
+interface PlanResponse {
+  run_id: string
+  status: string
+  research_plan: string
+  message: string
 }
 
 function AgentCard({ 
@@ -127,12 +134,20 @@ function App() {
   const [query, setQuery] = useState('')
   const [runId, setRunId] = useState<string | null>(null)
   const [status, setStatus] = useState<ResearchStatus | null>(null)
+  const [pendingPlan, setPendingPlan] = useState<PlanResponse | null>(null)
   const [isPolling, setIsPolling] = useState(false)
+  const [isCreatingPlan, setIsCreatingPlan] = useState(false)
+  const [isApproving, setIsApproving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
   useEffect(() => {
     const savedRunId = localStorage.getItem('meta_research_run_id')
-    if (savedRunId) {
+    const savedPlan = localStorage.getItem('meta_research_pending_plan')
+    if (savedPlan) {
+      const plan = JSON.parse(savedPlan) as PlanResponse
+      setPendingPlan(plan)
+      setRunId(plan.run_id)
+    } else if (savedRunId) {
       setRunId(savedRunId)
       setIsPolling(true)
     }
@@ -175,25 +190,54 @@ function App() {
     
     setError(null)
     setStatus(null)
+    setIsCreatingPlan(true)
     
     try {
-      const response = await axios.post<{ run_id: string }>('/api/research', { query })
-      const newRunId = response.data.run_id
-      setRunId(newRunId)
-      localStorage.setItem('meta_research_run_id', newRunId)
+      const response = await axios.post<PlanResponse>('/api/research', { query })
+      setPendingPlan(response.data)
+      setRunId(response.data.run_id)
+      localStorage.setItem('meta_research_pending_plan', JSON.stringify(response.data))
+    } catch (err) {
+      setError('Failed to create research plan. Please try again.')
+    } finally {
+      setIsCreatingPlan(false)
+    }
+  }
+  
+  const handleApprove = async () => {
+    if (!pendingPlan) return
+    
+    setIsApproving(true)
+    setError(null)
+    
+    try {
+      await axios.post(`/api/research/${pendingPlan.run_id}/approve`)
+      localStorage.removeItem('meta_research_pending_plan')
+      localStorage.setItem('meta_research_run_id', pendingPlan.run_id)
+      setPendingPlan(null)
       setIsPolling(true)
     } catch (err) {
-      setError('Failed to start research. Please try again.')
+      setError('Failed to approve research. Please try again.')
+    } finally {
+      setIsApproving(false)
     }
+  }
+  
+  const handleCancel = () => {
+    setPendingPlan(null)
+    setRunId(null)
+    localStorage.removeItem('meta_research_pending_plan')
   }
   
   const handleReset = () => {
     setQuery('')
     setRunId(null)
     setStatus(null)
+    setPendingPlan(null)
     setIsPolling(false)
     setError(null)
     localStorage.removeItem('meta_research_run_id')
+    localStorage.removeItem('meta_research_pending_plan')
   }
 
   return (
@@ -211,7 +255,7 @@ function App() {
           </p>
         </header>
         
-        {!runId && (
+        {!runId && !pendingPlan && (
           <form onSubmit={handleSubmit} className="max-w-3xl mx-auto mb-12">
             <div className="relative mb-4">
               <Search className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
@@ -220,19 +264,68 @@ function App() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Enter your research query... Be as detailed as possible for better results."
                 rows={4}
-                className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg resize-none"
+                disabled={isCreatingPlan}
+                className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg resize-none disabled:opacity-50"
               />
             </div>
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={!query.trim()}
-                className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                disabled={!query.trim() || isCreatingPlan}
+                className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
               >
-                Start Research
+                {isCreatingPlan ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Creating Plan...
+                  </>
+                ) : (
+                  'Create Research Plan'
+                )}
               </button>
             </div>
           </form>
+        )}
+        
+        {pendingPlan && !isPolling && (
+          <div className="max-w-3xl mx-auto mb-12">
+            <div className="p-6 bg-gray-800/50 border-2 border-purple-500/50 rounded-xl">
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles className="w-6 h-6 text-purple-400" />
+                <h2 className="text-xl font-semibold text-purple-400">Research Plan Ready for Approval</h2>
+              </div>
+              <div className="mb-6 p-4 bg-gray-900/50 rounded-lg">
+                <p className="text-gray-300 whitespace-pre-wrap">{pendingPlan.research_plan}</p>
+              </div>
+              <div className="flex items-center justify-end gap-4">
+                <button
+                  onClick={handleCancel}
+                  disabled={isApproving}
+                  className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <X className="w-5 h-5" />
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApprove}
+                  disabled={isApproving}
+                  className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-xl font-semibold transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isApproving ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Approving...
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="w-5 h-5" />
+                      Approve & Start Research
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
         
         {error && (
@@ -316,7 +409,7 @@ function App() {
           </>
         )}
         
-        {!runId && !status && (
+        {!runId && !status && !pendingPlan && (
           <div className="text-center py-12">
             <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
               <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">

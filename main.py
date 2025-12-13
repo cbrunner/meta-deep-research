@@ -75,10 +75,7 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
     return {
         **state,
         "research_plan": plan,
-        "gemini_data": {"status": "polling", "job_id": None, "output": None, "error": None},
-        "openai_data": {"status": "polling", "job_id": None, "output": None, "error": None},
-        "perplexity_data": {"status": "polling", "job_id": None, "output": None, "error": None},
-        "overall_status": "researching"
+        "overall_status": "pending_approval"
     }
 
 
@@ -284,6 +281,17 @@ Format with clear headers, bullet points, and proper Markdown formatting."""
     }
 
 
+async def start_research_node(state: MetaResearchState) -> MetaResearchState:
+    """Initialize research state after approval."""
+    return {
+        **state,
+        "gemini_data": {"status": "polling", "job_id": None, "output": None, "error": None},
+        "openai_data": {"status": "polling", "job_id": None, "output": None, "error": None},
+        "perplexity_data": {"status": "polling", "job_id": None, "output": None, "error": None},
+        "overall_status": "researching"
+    }
+
+
 async def parallel_research_node(state: MetaResearchState) -> MetaResearchState:
     """Execute all three research agents in parallel using asyncio.gather."""
     gemini_task = gemini_submit_node(state)
@@ -304,36 +312,46 @@ async def parallel_research_node(state: MetaResearchState) -> MetaResearchState:
     }
 
 
-def build_graph():
-    """Build the LangGraph StateGraph."""
+def build_plan_graph():
+    """Build graph for creating research plan (phase 1)."""
     workflow = StateGraph(MetaResearchState)
-    
     workflow.add_node("supervisor", supervisor_node)
+    workflow.add_edge(START, "supervisor")
+    workflow.add_edge("supervisor", END)
+    return workflow
+
+
+def build_research_graph():
+    """Build graph for executing research after approval (phase 2)."""
+    workflow = StateGraph(MetaResearchState)
+    workflow.add_node("start_research", start_research_node)
     workflow.add_node("parallel_research", parallel_research_node)
     workflow.add_node("synthesizer", synthesizer_node)
-    
-    workflow.add_edge(START, "supervisor")
-    workflow.add_edge("supervisor", "parallel_research")
+    workflow.add_edge(START, "start_research")
+    workflow.add_edge("start_research", "parallel_research")
     workflow.add_edge("parallel_research", "synthesizer")
     workflow.add_edge("synthesizer", END)
-    
     return workflow
 
 
 checkpointer = None
-graph = None
+plan_graph = None
+research_graph = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global checkpointer, graph
+    global checkpointer, plan_graph, research_graph
     
     async with AsyncSqliteSaver.from_conn_string("replit_state.db") as saver:
         checkpointer = saver
         await saver.setup()
         
-        workflow = build_graph()
-        graph = workflow.compile(checkpointer=saver)
+        plan_workflow = build_plan_graph()
+        plan_graph = plan_workflow.compile(checkpointer=saver)
+        
+        research_workflow = build_research_graph()
+        research_graph = research_workflow.compile(checkpointer=saver)
         
         yield
 
@@ -370,15 +388,23 @@ async def api_root():
         "service": "Meta-Deep Research API",
         "version": "1.0.0",
         "endpoints": {
-            "POST /api/research": "Start a new research job",
+            "POST /api/research": "Create a research plan (requires approval)",
+            "POST /api/research/{run_id}/approve": "Approve plan and start research",
             "GET /api/status/{run_id}": "Get research job status"
         }
     }
 
 
-@app.post("/api/research", response_model=ResearchResponse)
-async def start_research(request: ResearchRequest):
-    """Start a new meta-deep research job."""
+class PlanResponse(BaseModel):
+    run_id: str
+    status: str
+    research_plan: str
+    message: str
+
+
+@app.post("/api/research")
+async def create_research_plan(request: ResearchRequest):
+    """Create a research plan that requires user approval before starting."""
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
     
@@ -391,24 +417,67 @@ async def start_research(request: ResearchRequest):
         "openai_data": create_default_subagent_state(),
         "perplexity_data": create_default_subagent_state(),
         "consensus_report": None,
-        "overall_status": "starting"
+        "overall_status": "creating_plan"
     }
     
     config = {"configurable": {"thread_id": run_id}}
     
-    asyncio.create_task(run_research(run_id, initial_state, config))
+    try:
+        result = None
+        async for event in plan_graph.astream(initial_state, config, stream_mode="values"):
+            result = event
+        
+        plan = result.get("research_plan", "Plan generation failed") if result else "Plan generation failed"
+        
+        return {
+            "run_id": run_id,
+            "status": "pending_approval",
+            "research_plan": plan,
+            "message": "Research plan created. Approve to start research."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create research plan: {str(e)}")
+
+
+@app.post("/api/research/{run_id}/approve")
+async def approve_research(run_id: str):
+    """Approve the research plan and start the actual research."""
+    config = {"configurable": {"thread_id": run_id}}
     
-    return ResearchResponse(
-        run_id=run_id,
-        status="started",
-        message="Research job started. Poll /api/status/{run_id} for updates."
-    )
+    try:
+        state = await plan_graph.aget_state(config)
+        
+        if not state.values:
+            raise HTTPException(status_code=404, detail="Research job not found")
+        
+        if state.values.get("overall_status") != "pending_approval":
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot approve research in status: {state.values.get('overall_status')}"
+            )
+        
+        current_state = dict(state.values)
+        
+        approved_state = {**current_state, "overall_status": "approved"}
+        await plan_graph.aupdate_state(config, approved_state)
+        
+        asyncio.create_task(run_research(run_id, current_state, config))
+        
+        return {
+            "run_id": run_id,
+            "status": "started",
+            "message": "Research approved and started. Poll /api/status/{run_id} for updates."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to approve research: {str(e)}")
 
 
-async def run_research(run_id: str, initial_state: MetaResearchState, config: dict):
+async def run_research(run_id: str, current_state: dict, config: dict):
     """Run the research graph asynchronously."""
     try:
-        async for event in graph.astream(initial_state, config, stream_mode="values"):
+        async for event in research_graph.astream(current_state, config, stream_mode="values"):
             pass
     except Exception as e:
         print(f"Research error for {run_id}: {e}")
@@ -420,21 +489,33 @@ async def get_status(run_id: str):
     config = {"configurable": {"thread_id": run_id}}
     
     try:
-        state = await graph.aget_state(config)
-        
-        if state.values:
+        research_state = await research_graph.aget_state(config)
+        if research_state.values:
             return {
                 "run_id": run_id,
-                "user_query": state.values.get("user_query", ""),
-                "research_plan": state.values.get("research_plan"),
-                "gemini_data": state.values.get("gemini_data", create_default_subagent_state()),
-                "openai_data": state.values.get("openai_data", create_default_subagent_state()),
-                "perplexity_data": state.values.get("perplexity_data", create_default_subagent_state()),
-                "consensus_report": state.values.get("consensus_report"),
-                "overall_status": state.values.get("overall_status", "unknown")
+                "user_query": research_state.values.get("user_query", ""),
+                "research_plan": research_state.values.get("research_plan"),
+                "gemini_data": research_state.values.get("gemini_data", create_default_subagent_state()),
+                "openai_data": research_state.values.get("openai_data", create_default_subagent_state()),
+                "perplexity_data": research_state.values.get("perplexity_data", create_default_subagent_state()),
+                "consensus_report": research_state.values.get("consensus_report"),
+                "overall_status": research_state.values.get("overall_status", "unknown")
             }
-        else:
-            raise HTTPException(status_code=404, detail="Research job not found")
+        
+        plan_state = await plan_graph.aget_state(config)
+        if plan_state.values:
+            return {
+                "run_id": run_id,
+                "user_query": plan_state.values.get("user_query", ""),
+                "research_plan": plan_state.values.get("research_plan"),
+                "gemini_data": plan_state.values.get("gemini_data", create_default_subagent_state()),
+                "openai_data": plan_state.values.get("openai_data", create_default_subagent_state()),
+                "perplexity_data": plan_state.values.get("perplexity_data", create_default_subagent_state()),
+                "consensus_report": plan_state.values.get("consensus_report"),
+                "overall_status": plan_state.values.get("overall_status", "unknown")
+            }
+        
+        raise HTTPException(status_code=404, detail="Research job not found")
             
     except HTTPException:
         raise
