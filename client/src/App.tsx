@@ -3,8 +3,15 @@ import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, Pla
 import ReactMarkdown from 'react-markdown'
 import axios from 'axios'
 import html2pdf from 'html2pdf.js'
+import SourcesList from './SourcesList'
 
 axios.defaults.withCredentials = true
+
+interface Citation {
+  title: string
+  url: string
+  source_agent: string
+}
 
 interface SubAgentState {
   status: string
@@ -22,6 +29,7 @@ interface ResearchStatus {
   perplexity_data: SubAgentState
   consensus_report: string | null
   overall_status: string
+  citations?: Citation[]
 }
 
 interface PlanResponse {
@@ -874,7 +882,17 @@ function App() {
 
   const handleDownloadMarkdown = () => {
     if (!status?.consensus_report) return
-    const blob = new Blob([status.consensus_report], { type: 'text/markdown' })
+    
+    let content = status.consensus_report
+    
+    if (status.citations && status.citations.length > 0) {
+      content += '\n\n---\n\n## Sources\n\n'
+      status.citations.forEach((citation, index) => {
+        content += `${index + 1}. [${citation.title}](${citation.url}) *(${citation.source_agent})*\n`
+      })
+    }
+    
+    const blob = new Blob([content], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -1163,6 +1181,10 @@ function App() {
                     <div id="consensus-report-content" className="prose prose-invert prose-lg max-w-none">
                       <ReactMarkdown>{status.consensus_report}</ReactMarkdown>
                     </div>
+                    
+                    {status.citations && status.citations.length > 0 && (
+                      <SourcesList citations={status.citations} />
+                    )}
                   </div>
                 )}
                 
