@@ -1114,7 +1114,9 @@ function App() {
                       <Sparkles className="w-5 h-5 text-purple-400" />
                       <h2 className="font-semibold text-purple-400">Supervisor's Plan</h2>
                     </div>
-                    <p className="text-gray-300">{status.research_plan}</p>
+                    <div className="prose prose-invert prose-sm max-w-none text-gray-300">
+                      <ReactMarkdown>{status.research_plan}</ReactMarkdown>
+                    </div>
                   </div>
                 )}
                 
