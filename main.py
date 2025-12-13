@@ -17,7 +17,6 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 import httpx
 from openai import AsyncOpenAI
-from anthropic import AsyncAnthropic
 from google import genai
 
 from database import init_db, get_db, User, SupervisorConfig, async_session
@@ -31,7 +30,9 @@ from auth import (
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+AI_INTEGRATIONS_OPENROUTER_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENROUTER_API_KEY", "")
+AI_INTEGRATIONS_OPENROUTER_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENROUTER_BASE_URL", "")
 
 POLL_INTERVAL = 30
 
@@ -65,24 +66,27 @@ async def get_supervisor_config() -> Optional[SupervisorConfig]:
 
 
 async def supervisor_node(state: MetaResearchState) -> MetaResearchState:
-    """Supervisor: Creates research plan and routes to all three agents."""
+    """Supervisor: Creates research plan using OpenRouter via Replit AI Integrations."""
     query = state["user_query"]
     
     config = await get_supervisor_config()
-    model = config.supervisor_model if config else "claude-sonnet-4-20250514"
+    model = config.supervisor_model if config else "anthropic/claude-sonnet-4"
     prompt_template = config.supervisor_prompt if config else """You are a research supervisor. Create a brief research plan for this query:
 
 Query: {query}
 
 Output a concise 2-3 sentence plan explaining how three parallel deep research agents (Gemini, OpenAI, Perplexity) should approach this query."""
     
-    if not ANTHROPIC_API_KEY:
+    if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
         plan = f"Research plan for: {query}\n- Gather comprehensive data from Gemini Deep Research\n- Analyze with OpenAI Deep Research\n- Cross-reference with Perplexity Deep Research"
     else:
         try:
-            client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+            client = AsyncOpenAI(
+                api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
+                base_url=AI_INTEGRATIONS_OPENROUTER_BASE_URL
+            )
             prompt = prompt_template.replace("{query}", query)
-            response = await client.messages.create(
+            response = await client.chat.completions.create(
                 model=model,
                 max_tokens=500,
                 messages=[{
@@ -90,7 +94,7 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
                     "content": prompt
                 }]
             )
-            plan = response.content[0].text if hasattr(response.content[0], 'text') else str(response.content[0])
+            plan = response.choices[0].message.content or "Plan generation failed"
         except Exception as e:
             plan = f"Research plan for: {query}\n- Gather comprehensive data from all three research engines\nError creating detailed plan: {str(e)}"
     
@@ -238,7 +242,7 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
 
 
 async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
-    """Synthesize all research reports into a consensus report using Claude."""
+    """Synthesize all research reports using OpenRouter via Replit AI Integrations."""
     gemini_output = state["gemini_data"].get("output", "Not available")
     openai_output = state["openai_data"].get("output", "Not available")
     perplexity_output = state["perplexity_data"].get("output", "Not available")
@@ -265,16 +269,19 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     combined_reports = "\n\n---\n\n".join(available_reports)
     
     config = await get_supervisor_config()
-    model = config.synthesizer_model if config else "claude-sonnet-4-20250514"
+    model = config.synthesizer_model if config else "anthropic/claude-sonnet-4"
     
-    if not ANTHROPIC_API_KEY:
+    if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
         consensus = f"# Meta-Deep Research Consensus Report\n\n**Query:** {state['user_query']}\n\n---\n\n{combined_reports}"
     else:
         try:
-            client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-            response = await client.messages.create(
+            client = AsyncOpenAI(
+                api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
+                base_url=AI_INTEGRATIONS_OPENROUTER_BASE_URL
+            )
+            response = await client.chat.completions.create(
                 model=model,
-                max_tokens=6000,
+                max_tokens=8192,
                 messages=[{
                     "role": "user",
                     "content": f"""You are a research synthesis expert. Analyze the following research reports from three different AI research agents and create a comprehensive consensus report.
@@ -295,7 +302,7 @@ Create a well-structured consensus report in Markdown format that:
 Format with clear headers, bullet points, and proper Markdown formatting."""
                 }]
             )
-            consensus = response.content[0].text if hasattr(response.content[0], 'text') else str(response.content[0])
+            consensus = response.choices[0].message.content or "Synthesis failed"
         except Exception as e:
             consensus = f"# Meta-Deep Research Report\n\n**Query:** {state['user_query']}\n\n*Synthesis error: {str(e)}*\n\n---\n\n{combined_reports}"
     

@@ -5,12 +5,12 @@ A LangGraph-based background worker that orchestrates parallel deep research acr
 ## Overview
 
 This application provides a unified research orchestration system that:
-1. Takes a user query and creates a research plan using Claude Sonnet
+1. Takes a user query and creates a research plan using OpenRouter (configurable model)
 2. Dispatches the query to three parallel deep research agents in parallel:
    - **Gemini Deep Research** (`deep-research-pro-preview-12-2025`) via Interactions API
    - **OpenAI o3 Deep Research** (`o3-deep-research`) via Responses API with background mode
    - **Perplexity Deep Research** (`sonar-deep-research`)
-3. Synthesizes the results into a consensus report using Claude
+3. Synthesizes the results into a consensus report using OpenRouter (configurable model)
 
 ## Architecture
 
@@ -65,15 +65,21 @@ Set these environment variables before starting to create the first admin:
 ## Admin Configuration
 
 Admins can configure:
-- **Supervisor Model**: Model used to create research plans
+- **Supervisor Model**: Model used to create research plans (via OpenRouter)
 - **Supervisor Prompt**: Prompt template for research planning (use `{query}` placeholder)
-- **Synthesizer Model**: Model used to synthesize research reports
+- **Synthesizer Model**: Model used to synthesize research reports (via OpenRouter)
 
-Available Claude models:
-- claude-sonnet-4-20250514 (default)
-- claude-3-5-sonnet-20241022
-- claude-3-opus-20240229
-- claude-3-haiku-20240307
+Available models via OpenRouter (examples):
+- anthropic/claude-sonnet-4 (default)
+- anthropic/claude-3.5-sonnet
+- anthropic/claude-3-opus
+- openai/gpt-4o
+- openai/o1
+- google/gemini-2.0-flash-exp
+- meta-llama/llama-3.3-70b-instruct
+- mistralai/mistral-large
+- deepseek/deepseek-chat
+- qwen/qwen-2.5-72b-instruct
 
 ## API Endpoints
 
@@ -108,9 +114,12 @@ Available Claude models:
 - `GEMINI_API_KEY` - Google Gemini API key
 - `OPENAI_API_KEY` - OpenAI API key  
 - `PERPLEXITY_API_KEY` - Perplexity API key
-- `ANTHROPIC_API_KEY` - Anthropic API key (for supervisor and synthesizer)
+- `AI_INTEGRATIONS_OPENROUTER_API_KEY` - (auto-configured) OpenRouter via Replit AI Integrations
+- `AI_INTEGRATIONS_OPENROUTER_BASE_URL` - (auto-configured) OpenRouter via Replit AI Integrations
 - `INITIAL_ADMIN_EMAIL` - (optional) Email for initial admin user
 - `INITIAL_ADMIN_PASSWORD` - (optional) Password for initial admin user
+
+Note: OpenRouter integration uses Replit AI Integrations, which provides API access without requiring your own API key. Usage is billed to your Replit credits.
 
 ## Running the Application
 

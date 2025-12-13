@@ -85,13 +85,13 @@ class SupervisorConfig(Base):
     __tablename__ = "supervisor_config"
     
     id = Column(String, primary_key=True, default="default")
-    supervisor_model = Column(String, default="claude-sonnet-4-20250514")
+    supervisor_model = Column(String, default="anthropic/claude-sonnet-4")
     supervisor_prompt = Column(Text, default="""You are a research supervisor. Create a brief research plan for this query:
 
 Query: {query}
 
 Output a concise 2-3 sentence plan explaining how three parallel deep research agents (Gemini, OpenAI, Perplexity) should approach this query.""")
-    synthesizer_model = Column(String, default="claude-sonnet-4-20250514")
+    synthesizer_model = Column(String, default="anthropic/claude-sonnet-4")
     updated_by = Column(String, ForeignKey("users.id"), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

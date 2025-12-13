@@ -281,10 +281,20 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
   const [success, setSuccess] = useState(false)
 
   const AVAILABLE_MODELS = [
-    'claude-sonnet-4-20250514',
-    'claude-3-5-sonnet-20241022',
-    'claude-3-opus-20240229',
-    'claude-3-haiku-20240307'
+    'anthropic/claude-sonnet-4',
+    'anthropic/claude-3.5-sonnet',
+    'anthropic/claude-3-opus',
+    'anthropic/claude-3-haiku',
+    'openai/gpt-4o',
+    'openai/gpt-4o-mini',
+    'openai/o1',
+    'openai/o1-mini',
+    'google/gemini-2.0-flash-exp',
+    'google/gemini-pro-1.5',
+    'meta-llama/llama-3.3-70b-instruct',
+    'mistralai/mistral-large',
+    'deepseek/deepseek-chat',
+    'qwen/qwen-2.5-72b-instruct'
   ]
 
   useEffect(() => {
