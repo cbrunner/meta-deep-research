@@ -98,7 +98,8 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
         interaction = await client.aio.interactions.create(
             input=query,
             agent="deep-research-pro-preview-12-2025",
-            background=True
+            background=True,
+            config={"thinking_summaries": "auto"}
         )
         
         interaction_id = interaction.id
@@ -141,9 +142,10 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
         response = await client.responses.create(
             model="o3-deep-research",
             background=True,
-            reasoning={"summary": "auto"},
-            tools=[{"type": "web_search"}],
-            input=query
+            reasoning={"effort": "high", "summary": "auto"},
+            tools=[{"type": "web_search_preview"}],
+            input=query,
+            max_output_tokens=100000
         )
         
         response_id = response.id
