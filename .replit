@@ -36,6 +36,6 @@ localPort = 5000
 externalPort = 80
 
 [deployment]
-deploymentTarget = "autoscale"
-run = ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
-build = ["bash", "-c", "cd client && npm install && npm run build"]
+deploymentTarget = "cloudrun"
+build = ["sh", "-c", "cd client && npm install && npm run build"]
+run = ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 5000"]
