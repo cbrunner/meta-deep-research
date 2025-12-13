@@ -643,6 +643,7 @@ class ConfigUpdateRequest(BaseModel):
     supervisor_prompt: Optional[str] = None
     synthesizer_model: Optional[str] = None
     synthesizer_prompt: Optional[str] = None
+    show_live_agent_feeds: Optional[bool] = None
 
 
 @app.post("/api/auth/register")
@@ -745,7 +746,8 @@ async def get_admin_config(user: User = Depends(require_admin), db: AsyncSession
         "supervisor_model": config.supervisor_model,
         "supervisor_prompt": config.supervisor_prompt,
         "synthesizer_model": config.synthesizer_model,
-        "synthesizer_prompt": config.synthesizer_prompt or ""
+        "synthesizer_prompt": config.synthesizer_prompt or "",
+        "show_live_agent_feeds": config.show_live_agent_feeds
     }
 
 
@@ -770,6 +772,8 @@ async def update_admin_config(
         config.synthesizer_model = request.synthesizer_model
     if request.synthesizer_prompt is not None:
         config.synthesizer_prompt = request.synthesizer_prompt
+    if request.show_live_agent_feeds is not None:
+        config.show_live_agent_feeds = request.show_live_agent_feeds
     
     config.updated_by = user.id
     await db.commit()
@@ -779,7 +783,8 @@ async def update_admin_config(
         "supervisor_model": config.supervisor_model,
         "supervisor_prompt": config.supervisor_prompt,
         "synthesizer_model": config.synthesizer_model,
-        "synthesizer_prompt": config.synthesizer_prompt or ""
+        "synthesizer_prompt": config.synthesizer_prompt or "",
+        "show_live_agent_feeds": config.show_live_agent_feeds
     }
 
 

@@ -3,7 +3,7 @@ import ssl
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import Column, String, DateTime, Enum, Text, ForeignKey
+from sqlalchemy import Column, String, DateTime, Enum, Text, ForeignKey, Boolean
 from sqlalchemy.sql import func
 import enum
 
@@ -108,6 +108,7 @@ Create a well-structured consensus report in Markdown format that:
 5. Highlights the most reliable and well-supported conclusions
 
 Format with clear headers, bullet points, and proper Markdown formatting.""")
+    show_live_agent_feeds = Column(Boolean, default=True, nullable=False, server_default='true')
     updated_by = Column(String, ForeignKey("users.id"), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

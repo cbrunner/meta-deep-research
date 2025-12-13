@@ -52,6 +52,7 @@ interface AdminConfig {
   supervisor_prompt: string
   synthesizer_model: string
   synthesizer_prompt: string
+  show_live_agent_feeds: boolean
 }
 
 interface HistoryItem {
@@ -447,6 +448,28 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
             />
             <p className="text-xs text-gray-500 mt-1">Use {'{query}'} for the research query and {'{combined_reports}'} for the agent reports</p>
+          </div>
+
+          <div className="border-t border-gray-700 pt-6">
+            <h3 className="text-lg font-medium text-gray-300 mb-4">Display Settings</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm text-gray-400">Show Live Agent Feeds</label>
+                <p className="text-xs text-gray-500 mt-1">Display real-time streaming updates from each research agent during research</p>
+              </div>
+              <button
+                onClick={() => setConfig(c => c ? { ...c, show_live_agent_feeds: !c.show_live_agent_feeds } : null)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  config?.show_live_agent_feeds ? 'bg-purple-600' : 'bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    config?.show_live_agent_feeds ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
 
           <div className="flex justify-end gap-4 pt-4">
