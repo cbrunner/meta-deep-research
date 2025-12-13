@@ -111,11 +111,12 @@ async def require_admin(
 
 def set_session_cookie(response: Response, session_id: str):
     signed = sign_session_id(session_id)
+    is_production = os.environ.get("REPL_SLUG") is not None
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=signed,
         httponly=True,
-        secure=True,
+        secure=is_production,
         samesite="lax",
         max_age=SESSION_EXPIRY_DAYS * 24 * 60 * 60
     )

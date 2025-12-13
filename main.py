@@ -4,11 +4,13 @@ import uuid
 from typing import TypedDict, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -17,6 +19,14 @@ import httpx
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 from google import genai
+
+from database import init_db, get_db, User, SupervisorConfig, async_session
+from auth import (
+    hash_password, verify_password, create_session, delete_session,
+    get_current_user, get_current_user_optional, require_admin,
+    set_session_cookie, clear_session_cookie, create_initial_admin,
+    unsign_session_id, SESSION_COOKIE_NAME
+)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
@@ -47,25 +57,37 @@ class MetaResearchState(TypedDict):
     overall_status: str
 
 
+async def get_supervisor_config() -> Optional[SupervisorConfig]:
+    """Fetch supervisor config from database."""
+    async with async_session() as db:
+        result = await db.execute(select(SupervisorConfig).where(SupervisorConfig.id == "default"))
+        return result.scalar_one_or_none()
+
+
 async def supervisor_node(state: MetaResearchState) -> MetaResearchState:
     """Supervisor: Creates research plan and routes to all three agents."""
     query = state["user_query"]
+    
+    config = await get_supervisor_config()
+    model = config.supervisor_model if config else "claude-sonnet-4-20250514"
+    prompt_template = config.supervisor_prompt if config else """You are a research supervisor. Create a brief research plan for this query:
+
+Query: {query}
+
+Output a concise 2-3 sentence plan explaining how three parallel deep research agents (Gemini, OpenAI, Perplexity) should approach this query."""
     
     if not ANTHROPIC_API_KEY:
         plan = f"Research plan for: {query}\n- Gather comprehensive data from Gemini Deep Research\n- Analyze with OpenAI Deep Research\n- Cross-reference with Perplexity Deep Research"
     else:
         try:
             client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+            prompt = prompt_template.replace("{query}", query)
             response = await client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model=model,
                 max_tokens=500,
                 messages=[{
                     "role": "user",
-                    "content": f"""You are a research supervisor. Create a brief research plan for this query:
-                    
-Query: {query}
-
-Output a concise 2-3 sentence plan explaining how three parallel deep research agents (Gemini, OpenAI, Perplexity) should approach this query."""
+                    "content": prompt
                 }]
             )
             plan = response.content[0].text if hasattr(response.content[0], 'text') else str(response.content[0])
@@ -242,13 +264,16 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     
     combined_reports = "\n\n---\n\n".join(available_reports)
     
+    config = await get_supervisor_config()
+    model = config.synthesizer_model if config else "claude-sonnet-4-20250514"
+    
     if not ANTHROPIC_API_KEY:
         consensus = f"# Meta-Deep Research Consensus Report\n\n**Query:** {state['user_query']}\n\n---\n\n{combined_reports}"
     else:
         try:
             client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
             response = await client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model=model,
                 max_tokens=6000,
                 messages=[{
                     "role": "user",
@@ -343,6 +368,18 @@ research_graph = None
 async def lifespan(app: FastAPI):
     global checkpointer, plan_graph, research_graph
     
+    await init_db()
+    
+    async with async_session() as db:
+        await create_initial_admin(db)
+        
+        result = await db.execute(select(SupervisorConfig).where(SupervisorConfig.id == "default"))
+        if not result.scalar_one_or_none():
+            default_config = SupervisorConfig(id="default")
+            db.add(default_config)
+            await db.commit()
+            print("Created default supervisor config")
+    
     async with AsyncSqliteSaver.from_conn_string("replit_state.db") as saver:
         checkpointer = saver
         await saver.setup()
@@ -372,6 +409,172 @@ app.add_middleware(
 )
 
 
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    role: str
+    first_name: Optional[str]
+    last_name: Optional[str]
+
+
+class ConfigResponse(BaseModel):
+    supervisor_model: str
+    supervisor_prompt: str
+    synthesizer_model: str
+
+
+class ConfigUpdateRequest(BaseModel):
+    supervisor_model: Optional[str] = None
+    supervisor_prompt: Optional[str] = None
+    synthesizer_model: Optional[str] = None
+
+
+@app.post("/api/auth/register")
+async def register(request: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)):
+    """Register a new user account."""
+    result = await db.execute(select(User).where(User.email == request.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    user = User(
+        id=str(uuid.uuid4()),
+        email=request.email,
+        password_hash=hash_password(request.password),
+        first_name=request.first_name,
+        last_name=request.last_name
+    )
+    db.add(user)
+    await db.commit()
+    
+    session_id = await create_session(db, user.id)
+    set_session_cookie(response, session_id)
+    
+    return {
+        "message": "Registration successful",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "role": user.role.value,
+            "first_name": user.first_name,
+            "last_name": user.last_name
+        }
+    }
+
+
+@app.post("/api/auth/login")
+async def login(request: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
+    """Log in with email and password."""
+    result = await db.execute(select(User).where(User.email == request.email))
+    user = result.scalar_one_or_none()
+    
+    if not user or not verify_password(request.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    session_id = await create_session(db, user.id)
+    set_session_cookie(response, session_id)
+    
+    return {
+        "message": "Login successful",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "role": user.role.value,
+            "first_name": user.first_name,
+            "last_name": user.last_name
+        }
+    }
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    """Log out the current user."""
+    signed_session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    if signed_session_id:
+        session_id = unsign_session_id(signed_session_id)
+        if session_id:
+            await delete_session(db, session_id)
+    
+    clear_session_cookie(response)
+    return {"message": "Logged out successfully"}
+
+
+@app.get("/api/auth/me")
+async def get_me(user: User = Depends(get_current_user_optional)):
+    """Get the current authenticated user."""
+    if not user:
+        return {"authenticated": False, "user": None}
+    
+    return {
+        "authenticated": True,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "role": user.role.value,
+            "first_name": user.first_name,
+            "last_name": user.last_name
+        }
+    }
+
+
+@app.get("/api/admin/config")
+async def get_admin_config(user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Get the current supervisor configuration (admin only)."""
+    result = await db.execute(select(SupervisorConfig).where(SupervisorConfig.id == "default"))
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuration not found")
+    
+    return {
+        "supervisor_model": config.supervisor_model,
+        "supervisor_prompt": config.supervisor_prompt,
+        "synthesizer_model": config.synthesizer_model
+    }
+
+
+@app.patch("/api/admin/config")
+async def update_admin_config(
+    request: ConfigUpdateRequest,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update the supervisor configuration (admin only)."""
+    result = await db.execute(select(SupervisorConfig).where(SupervisorConfig.id == "default"))
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuration not found")
+    
+    if request.supervisor_model is not None:
+        config.supervisor_model = request.supervisor_model
+    if request.supervisor_prompt is not None:
+        config.supervisor_prompt = request.supervisor_prompt
+    if request.synthesizer_model is not None:
+        config.synthesizer_model = request.synthesizer_model
+    
+    config.updated_by = user.id
+    await db.commit()
+    
+    return {
+        "message": "Configuration updated",
+        "supervisor_model": config.supervisor_model,
+        "supervisor_prompt": config.supervisor_prompt,
+        "synthesizer_model": config.synthesizer_model
+    }
+
+
 class ResearchRequest(BaseModel):
     query: str
 
@@ -390,7 +593,13 @@ async def api_root():
         "endpoints": {
             "POST /api/research": "Create a research plan (requires approval)",
             "POST /api/research/{run_id}/approve": "Approve plan and start research",
-            "GET /api/status/{run_id}": "Get research job status"
+            "GET /api/status/{run_id}": "Get research job status",
+            "POST /api/auth/register": "Register a new user",
+            "POST /api/auth/login": "Log in",
+            "POST /api/auth/logout": "Log out",
+            "GET /api/auth/me": "Get current user",
+            "GET /api/admin/config": "Get admin config (admin only)",
+            "PATCH /api/admin/config": "Update admin config (admin only)"
         }
     }
 
@@ -403,7 +612,7 @@ class PlanResponse(BaseModel):
 
 
 @app.post("/api/research")
-async def create_research_plan(request: ResearchRequest):
+async def create_research_plan(request: ResearchRequest, user: User = Depends(get_current_user)):
     """Create a research plan that requires user approval before starting."""
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
@@ -440,7 +649,7 @@ async def create_research_plan(request: ResearchRequest):
 
 
 @app.post("/api/research/{run_id}/approve")
-async def approve_research(run_id: str):
+async def approve_research(run_id: str, user: User = Depends(get_current_user)):
     """Approve the research plan and start the actual research."""
     config = {"configurable": {"thread_id": run_id}}
     
@@ -484,7 +693,7 @@ async def run_research(run_id: str, current_state: dict, config: dict):
 
 
 @app.get("/api/status/{run_id}")
-async def get_status(run_id: str):
+async def get_status(run_id: str, user: User = Depends(get_current_user)):
     """Get the current status of a research job."""
     config = {"configurable": {"thread_id": run_id}}
     

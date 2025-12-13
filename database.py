@@ -1,18 +1,53 @@
 import os
+import ssl
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import Column, String, DateTime, Enum, Text, ForeignKey
 from sqlalchemy.sql import func
 import enum
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
-elif DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+def prepare_database_url(url: str) -> tuple[str, dict]:
+    """Prepare DATABASE_URL for asyncpg by removing sslmode and returning connect_args."""
+    if not url:
+        return "", {}
+    
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    
+    parsed = urlparse(url)
+    query_params = parse_qs(parsed.query)
+    
+    connect_args = {}
+    sslmode = query_params.pop("sslmode", [None])[0]
+    if sslmode and sslmode != "disable":
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        connect_args["ssl"] = ssl_context
+    
+    new_query = urlencode({k: v[0] for k, v in query_params.items()})
+    clean_url = urlunparse((
+        parsed.scheme,
+        parsed.netloc,
+        parsed.path,
+        parsed.params,
+        new_query,
+        parsed.fragment
+    ))
+    
+    return clean_url, connect_args
 
-engine = create_async_engine(DATABASE_URL, echo=False)
-async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+DATABASE_URL, CONNECT_ARGS = prepare_database_url(os.environ.get("DATABASE_URL", ""))
+
+if DATABASE_URL:
+    engine = create_async_engine(DATABASE_URL, echo=False, connect_args=CONNECT_ARGS)
+    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+else:
+    engine = None
+    async_session = None
 
 
 class Base(DeclarativeBase):
