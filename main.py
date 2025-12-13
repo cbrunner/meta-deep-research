@@ -599,6 +599,7 @@ async def api_root():
         "version": "1.0.0",
         "endpoints": {
             "POST /api/research": "Create a research plan (requires approval)",
+            "POST /api/research/immediate": "Start research immediately without planning",
             "POST /api/research/{run_id}/approve": "Approve plan and start research",
             "GET /api/status/{run_id}": "Get research job status",
             "POST /api/auth/register": "Register a new user",
@@ -653,6 +654,40 @@ async def create_research_plan(request: ResearchRequest, user: User = Depends(ge
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create research plan: {str(e)}")
+
+
+@app.post("/api/research/immediate")
+async def start_research_immediately(request: ResearchRequest, user: User = Depends(get_current_user)):
+    """Start research immediately without creating a plan first."""
+    if not request.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+    
+    run_id = str(uuid.uuid4())
+    
+    initial_state: MetaResearchState = {
+        "user_query": request.query,
+        "research_plan": f"Direct research query: {request.query}",
+        "gemini_data": {"status": "polling", "job_id": None, "output": None, "error": None},
+        "openai_data": {"status": "polling", "job_id": None, "output": None, "error": None},
+        "perplexity_data": {"status": "polling", "job_id": None, "output": None, "error": None},
+        "consensus_report": None,
+        "overall_status": "researching"
+    }
+    
+    config = {"configurable": {"thread_id": run_id}}
+    
+    try:
+        await research_graph.aupdate_state(config, initial_state)
+        
+        asyncio.create_task(run_research(run_id, initial_state, config))
+        
+        return {
+            "run_id": run_id,
+            "status": "started",
+            "message": "Research started immediately. Poll /api/status/{run_id} for updates."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start research: {str(e)}")
 
 
 @app.post("/api/research/{run_id}/approve")

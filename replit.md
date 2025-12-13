@@ -99,11 +99,17 @@ Available models via OpenRouter:
 ### Other
 - `GET /api/health` - Health check with API key configuration status
 
-## Two-Phase Research Flow
+## Research Flows
 
+### Two-Phase Flow (Create Research Plan)
 1. **Plan Creation Phase**: User submits query, supervisor creates a research plan
 2. **Approval Phase**: User reviews the plan and clicks "Approve & Start Research" or "Cancel"
 3. **Research Phase**: All three agents run in parallel, results are synthesized into consensus report
+
+### Immediate Flow (Start Research Now)
+1. User submits query and clicks "Start Research Now"
+2. Research agents run immediately in parallel (no plan created)
+3. Results are synthesized into consensus report
 
 ## Environment Variables Required
 

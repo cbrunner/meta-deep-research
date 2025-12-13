@@ -444,6 +444,7 @@ function App() {
   const [pendingPlan, setPendingPlan] = useState<PlanResponse | null>(null)
   const [isPolling, setIsPolling] = useState(false)
   const [isCreatingPlan, setIsCreatingPlan] = useState(false)
+  const [isStartingImmediate, setIsStartingImmediate] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -549,6 +550,30 @@ function App() {
       }
     } finally {
       setIsCreatingPlan(false)
+    }
+  }
+
+  const handleStartImmediate = async () => {
+    if (!query.trim()) return
+    
+    setError(null)
+    setStatus(null)
+    setIsStartingImmediate(true)
+    
+    try {
+      const response = await axios.post<{ run_id: string; status: string; message: string }>('/api/research/immediate', { query })
+      setRunId(response.data.run_id)
+      localStorage.setItem('meta_research_run_id', response.data.run_id)
+      setIsPolling(true)
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        setUser(null)
+        setError('Session expired. Please sign in again.')
+      } else {
+        setError('Failed to start research. Please try again.')
+      }
+    } finally {
+      setIsStartingImmediate(false)
     }
   }
   
@@ -688,10 +713,10 @@ function App() {
                     className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg resize-none disabled:opacity-50"
                   />
                 </div>
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-4">
                   <button
                     type="submit"
-                    disabled={!query.trim() || isCreatingPlan}
+                    disabled={!query.trim() || isCreatingPlan || isStartingImmediate}
                     className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
                   >
                     {isCreatingPlan ? (
@@ -701,6 +726,24 @@ function App() {
                       </>
                     ) : (
                       'Create Research Plan'
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartImmediate}
+                    disabled={!query.trim() || isCreatingPlan || isStartingImmediate}
+                    className="px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                  >
+                    {isStartingImmediate ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle className="w-5 h-5" />
+                        Start Research Now
+                      </>
                     )}
                   </button>
                 </div>
