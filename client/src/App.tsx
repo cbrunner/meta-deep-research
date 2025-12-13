@@ -397,7 +397,7 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               {AVAILABLE_MODELS.map(model => (
-                <option key={model.id} value={model.id}>{model.name}</option>
+                <option key={model.id} value={model.id}>{model.name} ({model.id})</option>
               ))}
             </select>
             <p className="text-xs text-gray-500 mt-1">Model used to create research plans</p>
@@ -422,7 +422,7 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               {AVAILABLE_MODELS.map(model => (
-                <option key={model.id} value={model.id}>{model.name}</option>
+                <option key={model.id} value={model.id}>{model.name} ({model.id})</option>
               ))}
             </select>
             <p className="text-xs text-gray-500 mt-1">Model used to synthesize research reports</p>
