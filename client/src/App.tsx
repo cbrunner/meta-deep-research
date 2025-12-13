@@ -212,18 +212,18 @@ function App() {
         </header>
         
         {!runId && (
-          <form onSubmit={handleSubmit} className="max-w-2xl mx-auto mb-12">
-            <div className="flex gap-3">
-              <div className="flex-1 relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Enter your research query..."
-                  className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg"
-                />
-              </div>
+          <form onSubmit={handleSubmit} className="max-w-3xl mx-auto mb-12">
+            <div className="relative mb-4">
+              <Search className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+              <textarea
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Enter your research query... Be as detailed as possible for better results."
+                rows={4}
+                className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg resize-none"
+              />
+            </div>
+            <div className="flex justify-end">
               <button
                 type="submit"
                 disabled={!query.trim()}
