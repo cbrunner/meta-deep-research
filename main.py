@@ -377,6 +377,26 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     config = await get_supervisor_config()
     model = config.synthesizer_model if config else "anthropic/claude-sonnet-4.5"
     
+    default_synthesizer_prompt = """You are a research synthesis expert. Analyze the following research reports from three different AI research agents and create a comprehensive consensus report.
+
+Original Query: {query}
+
+{combined_reports}
+
+---
+
+Create a well-structured consensus report in Markdown format that:
+1. Synthesizes the key findings from all available reports
+2. Identifies areas of agreement and any conflicting information
+3. Provides a balanced, comprehensive answer to the original query
+4. Includes citations where the source reports provided them
+5. Highlights the most reliable and well-supported conclusions
+
+Format with clear headers, bullet points, and proper Markdown formatting."""
+    
+    prompt_template = config.synthesizer_prompt if config and config.synthesizer_prompt else default_synthesizer_prompt
+    prompt = prompt_template.replace("{query}", state['user_query']).replace("{combined_reports}", combined_reports)
+    
     if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
         print(f"[SYNTHESIZER] OpenRouter not configured, using fallback synthesis")
         consensus = f"# Meta-Deep Research Consensus Report\n\n**Query:** {state['user_query']}\n\n---\n\n{combined_reports}"
@@ -393,22 +413,7 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
                 max_tokens=65536,
                 messages=[{
                     "role": "user",
-                    "content": f"""You are a research synthesis expert. Analyze the following research reports from three different AI research agents and create a comprehensive consensus report.
-
-Original Query: {state['user_query']}
-
-{combined_reports}
-
----
-
-Create a well-structured consensus report in Markdown format that:
-1. Synthesizes the key findings from all available reports
-2. Identifies areas of agreement and any conflicting information
-3. Provides a balanced, comprehensive answer to the original query
-4. Includes citations where the source reports provided them
-5. Highlights the most reliable and well-supported conclusions
-
-Format with clear headers, bullet points, and proper Markdown formatting."""
+                    "content": prompt
                 }]
             )
             consensus = response.choices[0].message.content or "Synthesis failed"
@@ -553,12 +558,14 @@ class ConfigResponse(BaseModel):
     supervisor_model: str
     supervisor_prompt: str
     synthesizer_model: str
+    synthesizer_prompt: str
 
 
 class ConfigUpdateRequest(BaseModel):
     supervisor_model: Optional[str] = None
     supervisor_prompt: Optional[str] = None
     synthesizer_model: Optional[str] = None
+    synthesizer_prompt: Optional[str] = None
 
 
 @app.post("/api/auth/register")
@@ -660,7 +667,8 @@ async def get_admin_config(user: User = Depends(require_admin), db: AsyncSession
     return {
         "supervisor_model": config.supervisor_model,
         "supervisor_prompt": config.supervisor_prompt,
-        "synthesizer_model": config.synthesizer_model
+        "synthesizer_model": config.synthesizer_model,
+        "synthesizer_prompt": config.synthesizer_prompt or ""
     }
 
 
@@ -683,6 +691,8 @@ async def update_admin_config(
         config.supervisor_prompt = request.supervisor_prompt
     if request.synthesizer_model is not None:
         config.synthesizer_model = request.synthesizer_model
+    if request.synthesizer_prompt is not None:
+        config.synthesizer_prompt = request.synthesizer_prompt
     
     config.updated_by = user.id
     await db.commit()
@@ -691,7 +701,8 @@ async def update_admin_config(
         "message": "Configuration updated",
         "supervisor_model": config.supervisor_model,
         "supervisor_prompt": config.supervisor_prompt,
-        "synthesizer_model": config.synthesizer_model
+        "synthesizer_model": config.synthesizer_model,
+        "synthesizer_prompt": config.synthesizer_prompt or ""
     }
 
 

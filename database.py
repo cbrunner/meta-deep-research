@@ -92,6 +92,22 @@ Query: {query}
 
 Output a concise 2-3 sentence plan explaining how three parallel deep research agents (Gemini, OpenAI, Perplexity) should approach this query.""")
     synthesizer_model = Column(String, default="anthropic/claude-sonnet-4.5")
+    synthesizer_prompt = Column(Text, default="""You are a research synthesis expert. Analyze the following research reports from three different AI research agents and create a comprehensive consensus report.
+
+Original Query: {query}
+
+{combined_reports}
+
+---
+
+Create a well-structured consensus report in Markdown format that:
+1. Synthesizes the key findings from all available reports
+2. Identifies areas of agreement and any conflicting information
+3. Provides a balanced, comprehensive answer to the original query
+4. Includes citations where the source reports provided them
+5. Highlights the most reliable and well-supported conclusions
+
+Format with clear headers, bullet points, and proper Markdown formatting.""")
     updated_by = Column(String, ForeignKey("users.id"), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

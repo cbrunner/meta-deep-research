@@ -43,6 +43,7 @@ interface AdminConfig {
   supervisor_model: string
   supervisor_prompt: string
   synthesizer_model: string
+  synthesizer_prompt: string
 }
 
 interface HistoryItem {
@@ -427,6 +428,17 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
               ))}
             </select>
             <p className="text-xs text-gray-500 mt-1">Model used to synthesize research reports</p>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Synthesizer Prompt</label>
+            <textarea
+              value={config?.synthesizer_prompt || ''}
+              onChange={(e) => setConfig(c => c ? { ...c, synthesizer_prompt: e.target.value } : null)}
+              rows={10}
+              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">Use {'{query}'} for the research query and {'{combined_reports}'} for the agent reports</p>
           </div>
 
           <div className="flex justify-end gap-4 pt-4">
