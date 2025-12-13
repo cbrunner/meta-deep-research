@@ -261,13 +261,13 @@ function App() {
                 color="blue"
               />
               <AgentCard 
-                name="OpenAI" 
+                name="o3 Deep Research" 
                 icon={Cpu}
                 data={status.openai_data} 
                 color="green"
               />
               <AgentCard 
-                name="Perplexity" 
+                name="Perplexity Deep Research" 
                 icon={Globe}
                 data={status.perplexity_data} 
                 color="orange"
@@ -326,12 +326,12 @@ function App() {
               </div>
               <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
                 <Cpu className="w-10 h-10 text-green-400 mx-auto mb-4" />
-                <h3 className="font-semibold mb-2">OpenAI Analysis</h3>
-                <p className="text-gray-400 text-sm">GPT-4's comprehensive analysis</p>
+                <h3 className="font-semibold mb-2">o3 Deep Research</h3>
+                <p className="text-gray-400 text-sm">OpenAI's comprehensive deep research</p>
               </div>
               <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
                 <Globe className="w-10 h-10 text-orange-400 mx-auto mb-4" />
-                <h3 className="font-semibold mb-2">Perplexity Search</h3>
+                <h3 className="font-semibold mb-2">Perplexity Deep Research</h3>
                 <p className="text-gray-400 text-sm">Real-time web research with citations</p>
               </div>
             </div>

@@ -83,7 +83,7 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
 
 
 async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
-    """Submit research job to Gemini using google-genai SDK."""
+    """Submit research job to Gemini Deep Research using Interactions API with polling."""
     query = state["user_query"]
     gemini_data = state["gemini_data"].copy()
     
@@ -95,23 +95,28 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model="gemini-2.0-flash",
-            contents=f"""You are a deep research agent. Conduct comprehensive research on the following query and provide a detailed, well-structured report with citations where possible.
-
-Query: {query}
-
-Provide a thorough analysis covering:
-1. Key findings and facts
-2. Multiple perspectives
-3. Supporting evidence
-4. Conclusions and recommendations"""
+        interaction = await client.aio.interactions.create(
+            input=query,
+            agent="deep-research-pro-preview-12-2025",
+            background=True
         )
         
-        gemini_data["status"] = "completed"
-        gemini_data["output"] = response.text
-        gemini_data["job_id"] = str(uuid.uuid4())[:8]
+        interaction_id = interaction.id
+        gemini_data["job_id"] = interaction_id[:8] if interaction_id else str(uuid.uuid4())[:8]
+        
+        while True:
+            result = await client.aio.interactions.get(interaction_id)
+            
+            if result.status == "completed":
+                gemini_data["status"] = "completed"
+                gemini_data["output"] = result.outputs[-1].text if result.outputs else "No output received"
+                break
+            elif result.status in ["failed", "cancelled"]:
+                gemini_data["status"] = "failed"
+                gemini_data["error"] = f"Gemini research {result.status}"
+                break
+            
+            await asyncio.sleep(POLL_INTERVAL)
         
     except Exception as e:
         gemini_data["status"] = "failed"
@@ -121,7 +126,7 @@ Provide a thorough analysis covering:
 
 
 async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
-    """Submit research job to OpenAI using responses API."""
+    """Submit research job to OpenAI o3 Deep Research using responses API with background polling."""
     query = state["user_query"]
     openai_data = state["openai_data"].copy()
     
@@ -131,28 +136,38 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
         return {**state, "openai_data": openai_data}
     
     try:
-        client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        client = AsyncOpenAI(api_key=OPENAI_API_KEY, timeout=3600)
         
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{
-                "role": "user",
-                "content": f"""You are a deep research agent. Conduct comprehensive research on the following query and provide a detailed, well-structured report.
-
-Query: {query}
-
-Provide a thorough analysis covering:
-1. Key findings and facts
-2. Multiple perspectives  
-3. Supporting evidence
-4. Conclusions and recommendations"""
-            }],
-            max_tokens=4000
+        response = await client.responses.create(
+            model="o3-deep-research",
+            background=True,
+            reasoning={"summary": "auto"},
+            tools=[{"type": "web_search"}],
+            input=query
         )
         
-        openai_data["status"] = "completed"
-        openai_data["output"] = response.choices[0].message.content
-        openai_data["job_id"] = response.id[:8] if response.id else str(uuid.uuid4())[:8]
+        response_id = response.id
+        openai_data["job_id"] = response_id[:8] if response_id else str(uuid.uuid4())[:8]
+        
+        while True:
+            result = await client.responses.retrieve(response_id)
+            
+            if result.status == "completed":
+                openai_data["status"] = "completed"
+                output_text = ""
+                for item in result.output:
+                    if hasattr(item, 'content'):
+                        for content in item.content:
+                            if hasattr(content, 'text'):
+                                output_text += content.text
+                openai_data["output"] = output_text or "Research completed"
+                break
+            elif result.status == "failed":
+                openai_data["status"] = "failed"
+                openai_data["error"] = f"OpenAI research failed: {getattr(result, 'error', 'Unknown error')}"
+                break
+            
+            await asyncio.sleep(POLL_INTERVAL)
         
     except Exception as e:
         openai_data["status"] = "failed"
@@ -162,7 +177,7 @@ Provide a thorough analysis covering:
 
 
 async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
-    """Submit research job to Perplexity using their API."""
+    """Submit research job to Perplexity Sonar Deep Research."""
     query = state["user_query"]
     perplexity_data = state["perplexity_data"].copy()
     
@@ -172,7 +187,7 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
         return {**state, "perplexity_data": perplexity_data}
     
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:
             response = await client.post(
                 "https://api.perplexity.ai/chat/completions",
                 headers={
@@ -180,20 +195,11 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "sonar-pro",
+                    "model": "sonar-deep-research",
                     "messages": [{
                         "role": "user",
-                        "content": f"""You are a deep research agent with access to real-time web data. Conduct comprehensive research on the following query and provide a detailed, well-structured report with citations.
-
-Query: {query}
-
-Provide a thorough analysis covering:
-1. Key findings and facts (with sources)
-2. Multiple perspectives
-3. Supporting evidence
-4. Conclusions and recommendations"""
-                    }],
-                    "max_tokens": 4000
+                        "content": query
+                    }]
                 }
             )
             response.raise_for_status()
