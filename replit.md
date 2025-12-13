@@ -7,10 +7,11 @@ A LangGraph-based background worker that orchestrates parallel deep research acr
 This application provides a unified research orchestration system that:
 1. Takes a user query and creates a research plan using OpenRouter (configurable model)
 2. Dispatches the query to three parallel deep research agents in parallel:
-   - **Gemini Deep Research** (`deep-research-pro-preview-12-2025`) via Interactions API
-   - **OpenAI o3 Deep Research** (`o3-deep-research`) via Responses API with background mode
-   - **Perplexity Deep Research** (`sonar-deep-research`)
+   - **Gemini Deep Research** (`deep-research-pro-preview-12-2025`) via Google Interactions API
+   - **OpenAI o3 Deep Research** (`openai/o3-deep-research`) via OpenRouter
+   - **Perplexity Deep Research** (`sonar-deep-research`) via Perplexity API
 3. Synthesizes the results into a consensus report using OpenRouter (configurable model)
+4. Allows users to download the final report as Markdown or PDF
 
 ## Architecture
 
@@ -121,7 +122,6 @@ Available models via OpenRouter:
 - `DATABASE_URL` - PostgreSQL connection string
 - `SESSION_SECRET` - Secret for signing session cookies
 - `GEMINI_API_KEY` - Google Gemini API key
-- `OPENAI_API_KEY` - OpenAI API key  
 - `PERPLEXITY_API_KEY` - Perplexity API key
 - `AI_INTEGRATIONS_OPENROUTER_API_KEY` - (auto-configured) OpenRouter via Replit AI Integrations
 - `AI_INTEGRATIONS_OPENROUTER_BASE_URL` - (auto-configured) OpenRouter via Replit AI Integrations
