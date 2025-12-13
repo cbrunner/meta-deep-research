@@ -180,51 +180,62 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
 
 
 async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
-    """Submit research job to OpenAI o3 Deep Research using responses API with background polling."""
+    """Submit research job to OpenAI o3 Deep Research via OpenRouter."""
     query = state["user_query"]
     openai_data = state["openai_data"].copy()
     
-    if not OPENAI_API_KEY:
+    if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
         openai_data["status"] = "failed"
-        openai_data["error"] = "OPENAI_API_KEY not configured"
+        openai_data["error"] = "OpenRouter not configured"
         return {**state, "openai_data": openai_data}
     
     try:
-        client = AsyncOpenAI(api_key=OPENAI_API_KEY, timeout=3600)
-        
-        response = await client.responses.create(
-            model="o3-deep-research",
-            background=True,
-            reasoning={"summary": "auto"},
-            tools=[{"type": "web_search_preview"}],
-            input=query,
-            max_output_tokens=100000
+        print(f"[OPENAI] Calling OpenRouter with model: openai/o3-deep-research")
+        client = AsyncOpenAI(
+            api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
+            base_url=AI_INTEGRATIONS_OPENROUTER_BASE_URL,
+            timeout=3600.0
         )
         
-        response_id = response.id
-        openai_data["job_id"] = response_id[:8] if response_id else str(uuid.uuid4())[:8]
+        response = await client.chat.completions.create(
+            model="openai/o3-deep-research",
+            max_tokens=100000,
+            messages=[{
+                "role": "user",
+                "content": query
+            }]
+        )
         
-        while True:
-            result = await client.responses.retrieve(response_id)
-            
-            if result.status == "completed":
-                openai_data["status"] = "completed"
-                output_text = ""
-                for item in result.output:
-                    if hasattr(item, 'content'):
-                        for content in item.content:
-                            if hasattr(content, 'text'):
-                                output_text += content.text
-                openai_data["output"] = output_text or "Research completed"
-                break
-            elif result.status == "failed":
-                openai_data["status"] = "failed"
-                openai_data["error"] = f"OpenAI research failed: {getattr(result, 'error', 'Unknown error')}"
-                break
-            
-            await asyncio.sleep(POLL_INTERVAL)
+        openai_data["job_id"] = response.id[:8] if response.id else str(uuid.uuid4())[:8]
+        print(f"[OPENAI] Response received, finish_reason: {response.choices[0].finish_reason if response.choices else 'N/A'}")
+        
+        # Extract content from response
+        output = None
+        if response.choices:
+            choice = response.choices[0]
+            # Try content first
+            if choice.message.content:
+                output = choice.message.content
+                print(f"[OPENAI] Got output from content field")
+            # Fallback to reasoning field for thinking models
+            elif hasattr(choice.message, 'reasoning') and choice.message.reasoning:
+                output = choice.message.reasoning
+                print(f"[OPENAI] Got output from reasoning field")
+            elif hasattr(choice.message, 'reasoning_content') and choice.message.reasoning_content:
+                output = choice.message.reasoning_content
+                print(f"[OPENAI] Got output from reasoning_content field")
+        
+        if output:
+            openai_data["status"] = "completed"
+            openai_data["output"] = output
+            print(f"[OPENAI] Output length: {len(output)} chars")
+        else:
+            openai_data["status"] = "failed"
+            openai_data["error"] = "No content returned from OpenAI deep research"
+            print(f"[OPENAI] WARNING: No content found in response")
         
     except Exception as e:
+        print(f"[OPENAI] ERROR: {type(e).__name__}: {str(e)}")
         openai_data["status"] = "failed"
         openai_data["error"] = str(e)
     
