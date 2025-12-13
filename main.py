@@ -70,6 +70,11 @@ async def supervisor_node(state: MetaResearchState) -> MetaResearchState:
     """Supervisor: Creates research plan using OpenRouter via Replit AI Integrations."""
     query = state["user_query"]
     
+    print(f"\n{'='*60}")
+    print(f"[SUPERVISOR] === SUPERVISOR NODE START ===")
+    print(f"[SUPERVISOR] INPUT query: {query[:500]}{'...' if len(query) > 500 else ''}")
+    print(f"{'='*60}")
+    
     config = await get_supervisor_config()
     model = config.supervisor_model if config else "anthropic/claude-sonnet-4.5"
     prompt_template = config.supervisor_prompt if config else """You are a research supervisor. Create a brief research plan for this query:
@@ -83,7 +88,7 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
         plan = f"Research plan for: {query}\n- Gather comprehensive data from Gemini Deep Research\n- Analyze with OpenAI Deep Research\n- Cross-reference with Perplexity Deep Research"
     else:
         try:
-            print(f"[SUPERVISOR] Calling OpenRouter with model: {model}")
+            print(f"[SUPERVISOR] Model: {model}")
             print(f"[SUPERVISOR] Base URL: {AI_INTEGRATIONS_OPENROUTER_BASE_URL}")
             client = AsyncOpenAI(
                 api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
@@ -123,10 +128,13 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
                 plan = "Plan generation failed - no content returned from model"
                 print(f"[SUPERVISOR] WARNING: No content found in response")
             else:
-                print(f"[SUPERVISOR] Final plan length: {len(plan)} chars")
+                print(f"[SUPERVISOR] OUTPUT plan length: {len(plan)} chars")
+                print(f"[SUPERVISOR] OUTPUT plan preview: {plan[:500]}{'...' if len(plan) > 500 else ''}")
         except Exception as e:
             print(f"[SUPERVISOR] ERROR: {type(e).__name__}: {str(e)}")
             plan = f"Research plan for: {query}\n- Gather comprehensive data from all three research engines\nError creating detailed plan: {str(e)}"
+    
+    print(f"[SUPERVISOR] === SUPERVISOR NODE END ===\n")
     
     return {
         **state,
@@ -140,13 +148,22 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
     query = state["user_query"]
     gemini_data = state["gemini_data"].copy()
     
+    print(f"\n{'='*60}")
+    print(f"[GEMINI] === GEMINI NODE START ===")
+    print(f"[GEMINI] INPUT query: {query[:500]}{'...' if len(query) > 500 else ''}")
+    print(f"[GEMINI] Model: deep-research-pro-preview-12-2025")
+    print(f"{'='*60}")
+    
     if not GEMINI_API_KEY:
         gemini_data["status"] = "failed"
         gemini_data["error"] = "GEMINI_API_KEY not configured"
+        print(f"[GEMINI] ERROR: GEMINI_API_KEY not configured")
+        print(f"[GEMINI] === GEMINI NODE END ===\n")
         return {**state, "gemini_data": gemini_data}
     
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
+        print(f"[GEMINI] Submitting to Interactions API...")
         
         interaction = await client.aio.interactions.create(
             input=query,
@@ -157,17 +174,24 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
         
         interaction_id = interaction.id
         gemini_data["job_id"] = interaction_id[:8] if interaction_id else str(uuid.uuid4())[:8]
+        print(f"[GEMINI] Job submitted, interaction_id: {interaction_id}")
         
+        poll_count = 0
         while True:
             result = await client.aio.interactions.get(interaction_id)
+            poll_count += 1
+            print(f"[GEMINI] Poll #{poll_count}: status={result.status}")
             
             if result.status == "completed":
                 gemini_data["status"] = "completed"
                 gemini_data["output"] = result.outputs[-1].text if result.outputs else "No output received"
+                print(f"[GEMINI] OUTPUT length: {len(gemini_data['output'])} chars")
+                print(f"[GEMINI] OUTPUT preview: {gemini_data['output'][:500]}{'...' if len(gemini_data['output']) > 500 else ''}")
                 break
             elif result.status in ["failed", "cancelled"]:
                 gemini_data["status"] = "failed"
                 gemini_data["error"] = f"Gemini research {result.status}"
+                print(f"[GEMINI] ERROR: {gemini_data['error']}")
                 break
             
             await asyncio.sleep(POLL_INTERVAL)
@@ -175,7 +199,9 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
     except Exception as e:
         gemini_data["status"] = "failed"
         gemini_data["error"] = str(e)
+        print(f"[GEMINI] EXCEPTION: {type(e).__name__}: {str(e)}")
     
+    print(f"[GEMINI] === GEMINI NODE END ===\n")
     return {**state, "gemini_data": gemini_data}
 
 
@@ -184,13 +210,21 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
     query = state["user_query"]
     openai_data = state["openai_data"].copy()
     
+    print(f"\n{'='*60}")
+    print(f"[OPENAI] === OPENAI NODE START ===")
+    print(f"[OPENAI] INPUT query: {query[:500]}{'...' if len(query) > 500 else ''}")
+    print(f"[OPENAI] Model: openai/o3-deep-research (via OpenRouter)")
+    print(f"{'='*60}")
+    
     if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
         openai_data["status"] = "failed"
         openai_data["error"] = "OpenRouter not configured"
+        print(f"[OPENAI] ERROR: OpenRouter not configured")
+        print(f"[OPENAI] === OPENAI NODE END ===\n")
         return {**state, "openai_data": openai_data}
     
     try:
-        print(f"[OPENAI] Calling OpenRouter with model: openai/o3-deep-research")
+        print(f"[OPENAI] Sending request to OpenRouter...")
         client = AsyncOpenAI(
             api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
             base_url=AI_INTEGRATIONS_OPENROUTER_BASE_URL,
@@ -207,7 +241,8 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
         )
         
         openai_data["job_id"] = response.id[:8] if response.id else str(uuid.uuid4())[:8]
-        print(f"[OPENAI] Response received, finish_reason: {response.choices[0].finish_reason if response.choices else 'N/A'}")
+        print(f"[OPENAI] Response received, id: {response.id}")
+        print(f"[OPENAI] finish_reason: {response.choices[0].finish_reason if response.choices else 'N/A'}")
         
         # Extract content from response
         output = None
@@ -228,17 +263,19 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
         if output:
             openai_data["status"] = "completed"
             openai_data["output"] = output
-            print(f"[OPENAI] Output length: {len(output)} chars")
+            print(f"[OPENAI] OUTPUT length: {len(output)} chars")
+            print(f"[OPENAI] OUTPUT preview: {output[:500]}{'...' if len(output) > 500 else ''}")
         else:
             openai_data["status"] = "failed"
             openai_data["error"] = "No content returned from OpenAI deep research"
             print(f"[OPENAI] WARNING: No content found in response")
         
     except Exception as e:
-        print(f"[OPENAI] ERROR: {type(e).__name__}: {str(e)}")
+        print(f"[OPENAI] EXCEPTION: {type(e).__name__}: {str(e)}")
         openai_data["status"] = "failed"
         openai_data["error"] = str(e)
     
+    print(f"[OPENAI] === OPENAI NODE END ===\n")
     return {**state, "openai_data": openai_data}
 
 
@@ -247,12 +284,21 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
     query = state["user_query"]
     perplexity_data = state["perplexity_data"].copy()
     
+    print(f"\n{'='*60}")
+    print(f"[PERPLEXITY] === PERPLEXITY NODE START ===")
+    print(f"[PERPLEXITY] INPUT query: {query[:500]}{'...' if len(query) > 500 else ''}")
+    print(f"[PERPLEXITY] Model: sonar-deep-research")
+    print(f"{'='*60}")
+    
     if not PERPLEXITY_API_KEY:
         perplexity_data["status"] = "failed"
         perplexity_data["error"] = "PERPLEXITY_API_KEY not configured"
+        print(f"[PERPLEXITY] ERROR: PERPLEXITY_API_KEY not configured")
+        print(f"[PERPLEXITY] === PERPLEXITY NODE END ===\n")
         return {**state, "perplexity_data": perplexity_data}
     
     try:
+        print(f"[PERPLEXITY] Sending request to Perplexity API...")
         async with httpx.AsyncClient(timeout=600.0) as client:
             response = await client.post(
                 "https://api.perplexity.ai/chat/completions",
@@ -274,16 +320,26 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
             perplexity_data["status"] = "completed"
             perplexity_data["output"] = data["choices"][0]["message"]["content"]
             perplexity_data["job_id"] = data.get("id", str(uuid.uuid4()))[:8]
+            print(f"[PERPLEXITY] Response received, id: {perplexity_data['job_id']}")
+            print(f"[PERPLEXITY] OUTPUT length: {len(perplexity_data['output'])} chars")
+            print(f"[PERPLEXITY] OUTPUT preview: {perplexity_data['output'][:500]}{'...' if len(perplexity_data['output']) > 500 else ''}")
             
     except Exception as e:
         perplexity_data["status"] = "failed"
         perplexity_data["error"] = str(e)
+        print(f"[PERPLEXITY] EXCEPTION: {type(e).__name__}: {str(e)}")
     
+    print(f"[PERPLEXITY] === PERPLEXITY NODE END ===\n")
     return {**state, "perplexity_data": perplexity_data}
 
 
 async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     """Synthesize all research reports using OpenRouter via Replit AI Integrations."""
+    print(f"\n{'='*60}")
+    print(f"[SYNTHESIZER] === SYNTHESIZER NODE START ===")
+    print(f"[SYNTHESIZER] INPUT query: {state['user_query'][:500]}{'...' if len(state['user_query']) > 500 else ''}")
+    print(f"{'='*60}")
+    
     gemini_output = state["gemini_data"].get("output", "Not available")
     openai_output = state["openai_data"].get("output", "Not available")
     perplexity_output = state["perplexity_data"].get("output", "Not available")
@@ -291,6 +347,10 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     gemini_status = state["gemini_data"].get("status", "unknown")
     openai_status = state["openai_data"].get("status", "unknown")
     perplexity_status = state["perplexity_data"].get("status", "unknown")
+    
+    print(f"[SYNTHESIZER] INPUT Gemini status: {gemini_status}, output length: {len(gemini_output) if gemini_output else 0}")
+    print(f"[SYNTHESIZER] INPUT OpenAI status: {openai_status}, output length: {len(openai_output) if openai_output else 0}")
+    print(f"[SYNTHESIZER] INPUT Perplexity status: {perplexity_status}, output length: {len(perplexity_output) if perplexity_output else 0}")
     
     available_reports = []
     if gemini_status == "completed" and gemini_output:
@@ -300,7 +360,11 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     if perplexity_status == "completed" and perplexity_output:
         available_reports.append(f"## Perplexity Research Report\n\n{perplexity_output}")
     
+    print(f"[SYNTHESIZER] Available reports count: {len(available_reports)}")
+    
     if not available_reports:
+        print(f"[SYNTHESIZER] ERROR: No reports available for synthesis")
+        print(f"[SYNTHESIZER] === SYNTHESIZER NODE END ===\n")
         return {
             **state,
             "consensus_report": "# Research Failed\n\nNo research agents were able to complete their analysis. Please check your API keys and try again.",
@@ -308,6 +372,7 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
         }
     
     combined_reports = "\n\n---\n\n".join(available_reports)
+    print(f"[SYNTHESIZER] Combined reports length: {len(combined_reports)} chars")
     
     config = await get_supervisor_config()
     model = config.synthesizer_model if config else "anthropic/claude-sonnet-4.5"
@@ -317,7 +382,8 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
         consensus = f"# Meta-Deep Research Consensus Report\n\n**Query:** {state['user_query']}\n\n---\n\n{combined_reports}"
     else:
         try:
-            print(f"[SYNTHESIZER] Calling OpenRouter with model: {model}")
+            print(f"[SYNTHESIZER] Model: {model}")
+            print(f"[SYNTHESIZER] Sending request to OpenRouter...")
             client = AsyncOpenAI(
                 api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
                 base_url=AI_INTEGRATIONS_OPENROUTER_BASE_URL
@@ -346,11 +412,13 @@ Format with clear headers, bullet points, and proper Markdown formatting."""
                 }]
             )
             consensus = response.choices[0].message.content or "Synthesis failed"
-            print(f"[SYNTHESIZER] Response received, consensus length: {len(consensus)} chars")
+            print(f"[SYNTHESIZER] OUTPUT consensus length: {len(consensus)} chars")
+            print(f"[SYNTHESIZER] OUTPUT preview: {consensus[:500]}{'...' if len(consensus) > 500 else ''}")
         except Exception as e:
-            print(f"[SYNTHESIZER] ERROR: {type(e).__name__}: {str(e)}")
+            print(f"[SYNTHESIZER] EXCEPTION: {type(e).__name__}: {str(e)}")
             consensus = f"# Meta-Deep Research Report\n\n**Query:** {state['user_query']}\n\n*Synthesis error: {str(e)}*\n\n---\n\n{combined_reports}"
     
+    print(f"[SYNTHESIZER] === SYNTHESIZER NODE END ===\n")
     return {
         **state,
         "consensus_report": consensus,
