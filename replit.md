@@ -5,8 +5,11 @@ A LangGraph-based background worker that orchestrates parallel deep research acr
 ## Overview
 
 This application provides a unified research orchestration system that:
-1. Takes a user query and creates a research plan using Claude 4.5 Sonnet
-2. Dispatches the query to three parallel deep research agents (Gemini, OpenAI, Perplexity)
+1. Takes a user query and creates a research plan using Claude Sonnet
+2. Dispatches the query to three parallel deep research agents in parallel:
+   - **Gemini Deep Research** (`deep-research-pro-preview-12-2025`) via Interactions API
+   - **OpenAI o3 Deep Research** (`o3-deep-research`) via Responses API with background mode
+   - **Perplexity Deep Research** (`sonar-deep-research`)
 3. Synthesizes the results into a consensus report using Claude
 
 ## Architecture
