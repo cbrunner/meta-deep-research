@@ -98,8 +98,19 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
                     "content": prompt
                 }]
             )
+            print(f"[SUPERVISOR] Full response object: {response}")
+            print(f"[SUPERVISOR] Response model: {response.model}")
+            print(f"[SUPERVISOR] Choices count: {len(response.choices)}")
+            if response.choices:
+                choice = response.choices[0]
+                print(f"[SUPERVISOR] Choice finish_reason: {choice.finish_reason}")
+                print(f"[SUPERVISOR] Choice message: {choice.message}")
+                print(f"[SUPERVISOR] Message content: {choice.message.content}")
+                print(f"[SUPERVISOR] Message content type: {type(choice.message.content)}")
+                if hasattr(choice.message, 'reasoning_content'):
+                    print(f"[SUPERVISOR] Reasoning content: {choice.message.reasoning_content}")
             plan = response.choices[0].message.content or "Plan generation failed"
-            print(f"[SUPERVISOR] Response received, plan length: {len(plan)} chars")
+            print(f"[SUPERVISOR] Final plan length: {len(plan)} chars")
             if plan == "Plan generation failed":
                 print(f"[SUPERVISOR] WARNING: Response content was empty/None")
         except Exception as e:
