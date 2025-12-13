@@ -930,12 +930,12 @@ function App() {
               <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
                 <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
                   <Sparkles className="w-10 h-10 text-blue-400 mx-auto mb-4" />
-                  <h3 className="font-semibold mb-2">Gemini Deep Research</h3>
+                  <h3 className="font-semibold mb-2">Google Deep Research</h3>
                   <p className="text-gray-400 text-sm">Google's advanced reasoning capabilities</p>
                 </div>
                 <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
                   <Cpu className="w-10 h-10 text-green-400 mx-auto mb-4" />
-                  <h3 className="font-semibold mb-2">o3 Deep Research</h3>
+                  <h3 className="font-semibold mb-2">OpenAI Deep Research</h3>
                   <p className="text-gray-400 text-sm">OpenAI's comprehensive deep research</p>
                 </div>
                 <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
@@ -1060,13 +1060,13 @@ function App() {
                 
                 <div className="grid md:grid-cols-3 gap-6 mb-8">
                   <AgentCard 
-                    name="Gemini" 
+                    name="Google Deep Research" 
                     icon={Sparkles}
                     data={status.gemini_data} 
                     color="blue"
                   />
                   <AgentCard 
-                    name="o3 Deep Research" 
+                    name="OpenAI Deep Research" 
                     icon={Cpu}
                     data={status.openai_data} 
                     color="green"
@@ -1126,12 +1126,12 @@ function App() {
                 <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
                   <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
                     <Sparkles className="w-10 h-10 text-blue-400 mx-auto mb-4" />
-                    <h3 className="font-semibold mb-2">Gemini Deep Research</h3>
+                    <h3 className="font-semibold mb-2">Google Deep Research</h3>
                     <p className="text-gray-400 text-sm">Google's advanced reasoning capabilities</p>
                   </div>
                   <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
                     <Cpu className="w-10 h-10 text-green-400 mx-auto mb-4" />
-                    <h3 className="font-semibold mb-2">o3 Deep Research</h3>
+                    <h3 className="font-semibold mb-2">OpenAI Deep Research</h3>
                     <p className="text-gray-400 text-sm">OpenAI's comprehensive deep research</p>
                   </div>
                   <div className="p-6 bg-gray-800/30 rounded-xl border border-gray-700">
