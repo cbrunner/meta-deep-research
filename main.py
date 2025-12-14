@@ -1147,6 +1147,42 @@ async def cancel_admin_job(run_id: str, user: User = Depends(require_admin), db:
     raise HTTPException(status_code=404, detail="Job not found or already completed")
 
 
+@app.get("/api/admin/history")
+async def get_admin_history(
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    limit: int = 50,
+    offset: int = 0
+):
+    """Get all research history with user info (admin only)."""
+    result = await db.execute(
+        select(ResearchHistory, User.email).join(User, ResearchHistory.user_id == User.id)
+        .order_by(ResearchHistory.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    items = result.all()
+    
+    count_result = await db.execute(select(ResearchHistory))
+    total = len(count_result.scalars().all())
+    
+    return {
+        "items": [
+            {
+                "id": h.id,
+                "run_id": h.run_id,
+                "user_email": email,
+                "query": h.query[:100] + ("..." if len(h.query) > 100 else ""),
+                "overall_status": h.overall_status,
+                "created_at": h.created_at.isoformat() if h.created_at else None,
+                "completed_at": h.completed_at.isoformat() if h.completed_at else None
+            }
+            for h, email in items
+        ],
+        "total": total
+    }
+
+
 @app.get("/api/admin/users")
 async def get_admin_users(
     user: User = Depends(require_admin),

@@ -545,6 +545,8 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
   const [deletingUser, setDeletingUser] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<UserData | null>(null)
   const [currentUserLoading, setCurrentUserLoading] = useState(true)
+  const [adminHistory, setAdminHistory] = useState<Array<{id: string, run_id: string, user_email: string, query: string, overall_status: string, created_at: string | null, completed_at: string | null}>>([])
+  const [loadingAdminHistory, setLoadingAdminHistory] = useState(true)
 
   const AVAILABLE_MODELS = [
     { id: 'google/gemini-3-pro-preview', name: 'Google Gemini 3 Pro Preview' },
@@ -591,6 +593,18 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
       setError('Failed to identify current user. User management may not work correctly.')
     } finally {
       setCurrentUserLoading(false)
+    }
+  }, [])
+
+  const fetchAdminHistory = useCallback(async () => {
+    setLoadingAdminHistory(true)
+    try {
+      const response = await axios.get('/api/admin/history')
+      setAdminHistory(response.data.items)
+    } catch (err) {
+      console.error('Failed to fetch admin history:', err)
+    } finally {
+      setLoadingAdminHistory(false)
     }
   }, [])
 
@@ -650,9 +664,10 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
     fetchActiveJobs()
     fetchUsers()
     fetchCurrentUser()
+    fetchAdminHistory()
     const interval = setInterval(fetchActiveJobs, 5000)
     return () => clearInterval(interval)
-  }, [fetchActiveJobs, fetchUsers, fetchCurrentUser])
+  }, [fetchActiveJobs, fetchUsers, fetchCurrentUser, fetchAdminHistory])
 
   const handleCancelJob = async (runId: string) => {
     setCancellingJob(runId)
@@ -978,6 +993,45 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
                     </div>
                   )
                 })}
+              </div>
+            )}
+          </section>
+
+          <section className="bg-gray-700/50 rounded-xl p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <History className="w-5 h-5" />
+              All Research History
+            </h3>
+            {loadingAdminHistory ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+              </div>
+            ) : adminHistory.length === 0 ? (
+              <p className="text-gray-400 text-center py-4">No research history found.</p>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {adminHistory.map((item) => (
+                  <div key={item.id} className="p-3 bg-gray-600/50 rounded-lg">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-purple-400 font-medium">{item.user_email}</p>
+                        <p className="text-white truncate">{item.query}</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {item.created_at ? new Date(item.created_at).toLocaleString() : 'N/A'}
+                        </p>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs shrink-0 ${
+                        item.overall_status === 'completed' 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : item.overall_status === 'failed' || item.overall_status === 'cancelled'
+                          ? 'bg-red-500/20 text-red-400' 
+                          : 'bg-yellow-500/20 text-yellow-400'
+                      }`}>
+                        {item.overall_status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </section>
