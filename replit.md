@@ -84,6 +84,14 @@ When enabled, the app displays real-time updates from each research agent:
 
 The live feeds are displayed within each agent card during active research and remain visible even after an individual agent completes, as long as the overall research session is still in progress.
 
+## Thinking Token Filtering
+
+Some research agents (notably Perplexity's `sonar-deep-research`) include internal reasoning wrapped in `<think>...</think>` tags in their output. These thinking tokens are:
+- **Detected**: Each agent node logs whether thinking tokens are found in the output
+- **Stripped**: Before synthesis, all agent outputs are cleaned of `<think>`, `<thinking>`, and `<reasoning>` tags to prevent internal reasoning from polluting the final consensus report
+
+This filtering is automatic and logged in the console output.
+
 Available models via OpenRouter:
 - google/gemini-3-pro-preview - Google Gemini 3 Pro Preview
 - google/gemini-2.5-pro - Google Gemini 2.5 Pro
