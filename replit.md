@@ -93,6 +93,7 @@ Admins can configure:
 - **Show Live Agent Feeds**: Toggle to display real-time streaming updates from each research agent during research
 - **Agent Timeout (minutes)**: Maximum time each research agent is allowed to run before timing out (default: 120 minutes, range: 5-1440 minutes)
 - **Active Research Jobs**: View all currently running research jobs with user email, query preview, and start time. Admins can cancel any running job.
+- **User Management**: View all registered users, change user roles between user/admin, and delete users. Admins cannot modify or delete their own account for safety.
 
 ## Live Agent Status Streaming
 
@@ -134,6 +135,9 @@ Available models via OpenRouter:
 - `PATCH /api/admin/config` - Update supervisor configuration
 - `GET /api/admin/jobs` - Get list of active research jobs
 - `POST /api/admin/jobs/{run_id}/cancel` - Cancel an active research job
+- `GET /api/admin/users` - Get list of all users
+- `PATCH /api/admin/users/{user_id}` - Update user role
+- `DELETE /api/admin/users/{user_id}` - Delete user (cannot delete self)
 
 ### Research (requires authentication)
 - `POST /api/research` - Create a research plan (requires approval)
