@@ -1333,7 +1333,7 @@ function App() {
       setStatus(response.data)
       setError(null)
       
-      if (response.data.overall_status === 'completed' || response.data.overall_status === 'failed') {
+      if (response.data.overall_status === 'completed' || response.data.overall_status === 'failed' || response.data.overall_status === 'cancelled') {
         setIsPolling(false)
         localStorage.removeItem('meta_research_run_id')
       }
