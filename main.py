@@ -183,6 +183,38 @@ def extract_citations_from_markdown(text: str, source_agent: str) -> List[dict]:
     return citations
 
 
+def detect_thinking_tokens(text: str, agent_name: str) -> dict:
+    """Detect thinking tokens in agent output and log findings."""
+    if not text:
+        return {"found": False, "patterns": []}
+    
+    patterns = [
+        (r'<think>', r'</think>'),
+        (r'<thinking>', r'</thinking>'),
+        (r'<reasoning>', r'</reasoning>'),
+    ]
+    
+    found_patterns = []
+    for open_tag, close_tag in patterns:
+        open_match = re.search(open_tag, text, re.IGNORECASE)
+        if open_match:
+            found_patterns.append({
+                "tag": open_tag.strip('<>'),
+                "position": open_match.start(),
+                "sample": text[open_match.start():open_match.start()+200]
+            })
+    
+    if found_patterns:
+        print(f"[{agent_name}] THINKING TOKENS DETECTED:")
+        for p in found_patterns:
+            print(f"[{agent_name}]   - <{p['tag']}> found at position {p['position']}")
+            print(f"[{agent_name}]   - Sample: \"{p['sample'][:100]}...\"")
+    else:
+        print(f"[{agent_name}] No thinking tokens detected in output")
+    
+    return {"found": len(found_patterns) > 0, "patterns": found_patterns}
+
+
 async def get_supervisor_config() -> Optional[SupervisorConfig]:
     """Fetch supervisor config from database."""
     async with async_session() as db:
@@ -346,6 +378,7 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
                 gemini_data["status"] = "completed"
                 gemini_data["output"] = result.outputs[-1].text if result.outputs else "No output received"
                 gemini_data["citations"] = extract_citations_from_markdown(gemini_data["output"], "Gemini")
+                detect_thinking_tokens(gemini_data["output"], "GEMINI")
                 print(f"[GEMINI] OUTPUT length: {len(gemini_data['output'])} chars")
                 print(f"[GEMINI] Citations extracted: {len(gemini_data['citations'])}")
                 print(f"[GEMINI] OUTPUT preview: {gemini_data['output'][:500]}{'...' if len(gemini_data['output']) > 500 else ''}")
@@ -455,6 +488,7 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
             openai_data["status"] = "completed"
             openai_data["output"] = output
             openai_data["citations"] = extract_citations_from_markdown(output, "OpenAI")
+            detect_thinking_tokens(output, "OPENAI")
             print(f"[OPENAI] OUTPUT length: {len(output)} chars")
             print(f"[OPENAI] Citations extracted: {len(openai_data['citations'])}")
             print(f"[OPENAI] OUTPUT preview: {output[:500]}{'...' if len(output) > 500 else ''}")
@@ -566,6 +600,7 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
             print(f"[PERPLEXITY] OUTPUT length: {len(perplexity_data['output'])} chars")
             print(f"[PERPLEXITY] Citations extracted: {len(perplexity_data['citations'])} (API: {len(api_citations)}, MD: {len(md_citations)})")
             print(f"[PERPLEXITY] OUTPUT preview: {perplexity_data['output'][:500]}{'...' if len(perplexity_data['output']) > 500 else ''}")
+            detect_thinking_tokens(perplexity_data["output"], "PERPLEXITY")
             
             if run_id:
                 emit_live_update(run_id, "perplexity", "completed", {"citations_count": len(perplexity_data["citations"])})
