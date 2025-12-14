@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 body {
   margin: 0;
@@ -7,4 +8,101 @@ body {
 
 #root {
   min-height: 100vh;
+}
+
+/* Print/PDF styles */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+
+  /* Hide non-essential elements */
+  header nav,
+  .no-print,
+  button:not(.print-include) {
+    display: none !important;
+  }
+
+  /* Report container adjustments */
+  .print-container {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Typography adjustments for print */
+  .prose {
+    max-width: 100% !important;
+    font-size: 11pt !important;
+  }
+
+  .prose h1 {
+    font-size: 18pt !important;
+    page-break-after: avoid;
+  }
+
+  .prose h2 {
+    font-size: 14pt !important;
+    page-break-after: avoid;
+  }
+
+  .prose h3 {
+    font-size: 12pt !important;
+    page-break-after: avoid;
+  }
+
+  .prose p,
+  .prose li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  .prose blockquote {
+    border-left: 2px solid #6366f1 !important;
+    background: #f8fafc !important;
+    padding: 0.5rem 1rem !important;
+  }
+
+  .prose pre {
+    background: #f1f5f9 !important;
+    color: #1e293b !important;
+    border: 1px solid #e2e8f0 !important;
+    padding: 0.5rem !important;
+    font-size: 9pt !important;
+    page-break-inside: avoid;
+  }
+
+  .prose table {
+    page-break-inside: avoid;
+  }
+
+  .prose img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  /* Links for print - show URL */
+  .prose a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #64748b;
+  }
+
+  /* Page margins */
+  @page {
+    margin: 1in;
+  }
+
+  /* Gradient headers become solid for print */
+  .bg-gradient-to-r {
+    background: #1e293b !important;
+  }
+
+  /* Citation list print styling */
+  .citation-list li {
+    page-break-inside: avoid;
+  }
 }

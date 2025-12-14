@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save, History, Clock, ChevronLeft, Download, FileText, ExternalLink, Check, Circle, AlertTriangle, Trash2 } from 'lucide-react'
+import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save, History, Clock, ChevronLeft, FileText, ExternalLink, Check, Circle, AlertTriangle, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import axios from 'axios'
 import html2pdf from 'html2pdf.js'
-import SourcesList from './SourcesList'
+import { ReportContainer } from './components/ReportContainer'
 
 axios.defaults.withCredentials = true
 
@@ -1584,44 +1584,24 @@ function App() {
                 )}
                 
                 {status.consensus_report && (
-                  <div className="mt-8 p-8 bg-gray-800/70 border border-gray-700 rounded-xl">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <CheckCircle className="w-6 h-6 text-green-500" />
-                        Consensus Report
-                      </h2>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={handleDownloadMarkdown}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm transition-colors flex items-center gap-2"
-                          title="Download as Markdown"
-                        >
-                          <FileText className="w-4 h-4" />
-                          Markdown
-                        </button>
-                        <button
-                          onClick={handleDownloadPDF}
-                          className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm transition-colors flex items-center gap-2"
-                          title="Download as PDF"
-                        >
-                          <Download className="w-4 h-4" />
-                          PDF
-                        </button>
-                        <button
-                          onClick={handleReset}
-                          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors"
-                        >
-                          New Research
-                        </button>
-                      </div>
+                  <div className="mt-8">
+                    <div className="flex items-center justify-end mb-4 gap-2">
+                      <button
+                        onClick={handleReset}
+                        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-colors"
+                      >
+                        New Research
+                      </button>
                     </div>
-                    <div id="consensus-report-content" className="prose prose-invert prose-lg max-w-none">
-                      <ReactMarkdown>{status.consensus_report}</ReactMarkdown>
+                    <div id="consensus-report-content">
+                      <ReportContainer
+                        title={status.user_query}
+                        content={status.consensus_report}
+                        citations={status.citations || []}
+                        onDownloadMarkdown={handleDownloadMarkdown}
+                        onDownloadPDF={handleDownloadPDF}
+                      />
                     </div>
-                    
-                    {status.citations && status.citations.length > 0 && (
-                      <SourcesList citations={status.citations} />
-                    )}
                   </div>
                 )}
                 
