@@ -104,6 +104,10 @@ When enabled, the app displays real-time updates from each research agent:
 
 The live feeds are displayed within each agent card during active research and remain visible even after an individual agent completes, as long as the overall research session is still in progress.
 
+### Individual Agent Status Updates
+
+Each agent card shows its completion status immediately when that specific agent finishes, rather than waiting for all agents to complete. The frontend uses live update events (`completed`/`error`) to detect individual agent completion and updates the visual status (icon, text, styling) in real-time. This provides better user feedback during long-running research sessions.
+
 ## Thinking Token Filtering
 
 Some research agents (notably Perplexity's `sonar-deep-research`) include internal reasoning wrapped in `<think>...</think>` tags in their output. These thinking tokens are:
