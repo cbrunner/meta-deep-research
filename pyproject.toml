@@ -26,4 +26,5 @@ dependencies = [
     "sift-stack-py>=0.9.5",
     "sqlalchemy[asyncio]>=2.0.45",
     "uvicorn>=0.38.0",
+    "weasyprint>=67.0",
 ]

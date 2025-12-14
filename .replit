@@ -5,7 +5,7 @@ integrations = ["python_openrouter_ai_integrations:1.0.0"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["cargo", "libiconv", "libxcrypt", "openssl", "postgresql", "rustc", "sqlite", "zlib", "xorg.libxcb", "xorg.libX11", "xorg.libXcomposite", "xorg.libXcursor", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXi", "xorg.libXrandr", "xorg.libXrender", "xorg.libXtst", "nss", "nspr", "atk", "at-spi2-atk", "cups", "libdrm", "gtk3", "pango", "alsa-lib"]
+packages = ["alsa-lib", "at-spi2-atk", "atk", "cargo", "cups", "fontconfig", "ghostscript", "glib", "gtk3", "harfbuzz", "libdrm", "libiconv", "libxcrypt", "nspr", "nss", "openssl", "pango", "postgresql", "rustc", "sqlite", "xorg.libX11", "xorg.libXcomposite", "xorg.libXcursor", "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXi", "xorg.libXrandr", "xorg.libXrender", "xorg.libXtst", "xorg.libxcb", "zlib"]
 
 [workflows]
 runButton = "Project"

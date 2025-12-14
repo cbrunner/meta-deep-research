@@ -23,7 +23,7 @@ from openai import AsyncOpenAI
 from google import genai
 import markdown
 from jinja2 import Environment, FileSystemLoader
-from pyppeteer import launch as pyppeteer_launch
+from weasyprint import HTML
 
 from datetime import datetime, timezone
 from database import init_db, get_db, User, SupervisorConfig, ResearchHistory, async_session, engine
@@ -1742,7 +1742,6 @@ async def generate_pdf(
         if not item.consensus_report:
             raise HTTPException(status_code=400, detail="Report not yet complete")
         
-        browser = None
         try:
             # Convert markdown to HTML
             md = markdown.Markdown(extensions=['tables', 'fenced_code', 'toc'])
@@ -1766,28 +1765,22 @@ async def generate_pdf(
             # Render template
             env = Environment(loader=FileSystemLoader('templates'))
             template = env.get_template('pdf_report.html')
-            html = template.render(
+            html_content = template.render(
                 title=item.query,
                 content=content_html,
                 citations=citations,
                 created_at=item.created_at.strftime("%B %d, %Y") if item.created_at else "Unknown"
             )
             
-            # Generate PDF with pyppeteer
-            print(f"[PDF] Launching browser for run_id: {run_id}")
-            browser = await pyppeteer_launch(
-                headless=True,
-                args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-            )
-            page = await browser.newPage()
-            await page.setContent(html, waitUntil='networkidle0')
-            pdf_bytes = await page.pdf({
-                'format': 'A4',
-                'printBackground': True,
-                'margin': {'top': '2cm', 'bottom': '2cm', 'left': '2cm', 'right': '2cm'}
-            })
-            await browser.close()
-            browser = None
+            # Generate PDF with WeasyPrint
+            print(f"[PDF] Generating PDF for run_id: {run_id}")
+            
+            def generate_pdf():
+                return HTML(string=html_content).write_pdf()
+            
+            loop = asyncio.get_event_loop()
+            pdf_bytes = await loop.run_in_executor(None, generate_pdf)
+            
             print(f"[PDF] Successfully generated PDF for run_id: {run_id}, size: {len(pdf_bytes)} bytes")
             
             # Return PDF
@@ -1799,11 +1792,6 @@ async def generate_pdf(
             )
         except Exception as e:
             print(f"[PDF] ERROR generating PDF for run_id {run_id}: {type(e).__name__}: {str(e)}")
-            if browser:
-                try:
-                    await browser.close()
-                except:
-                    pass
             raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
 
