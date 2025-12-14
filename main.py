@@ -1078,6 +1078,93 @@ async def cancel_admin_job(run_id: str, user: User = Depends(require_admin)):
     raise HTTPException(status_code=404, detail="Job not found or already completed")
 
 
+@app.get("/api/admin/users")
+async def get_admin_users(
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get list of all users (admin only)."""
+    result = await db.execute(
+        select(User).order_by(User.created_at.desc())
+    )
+    users = result.scalars().all()
+    return {
+        "users": [
+            {
+                "id": u.id,
+                "email": u.email,
+                "role": u.role.value,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+                "created_at": u.created_at.isoformat() if u.created_at else None
+            }
+            for u in users
+        ]
+    }
+
+
+class UpdateUserRequest(BaseModel):
+    role: Optional[str] = None
+
+
+@app.patch("/api/admin/users/{user_id}")
+async def update_admin_user(
+    user_id: str,
+    request: UpdateUserRequest,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a user's role (admin only)."""
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="Cannot modify your own account")
+    
+    result = await db.execute(select(User).where(User.id == user_id))
+    target_user = result.scalar_one_or_none()
+    
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if request.role is not None:
+        if request.role not in ["user", "admin"]:
+            raise HTTPException(status_code=400, detail="Invalid role. Must be 'user' or 'admin'")
+        target_user.role = UserRole(request.role)
+    
+    await db.commit()
+    
+    return {
+        "message": "User updated",
+        "user": {
+            "id": target_user.id,
+            "email": target_user.email,
+            "role": target_user.role.value,
+            "first_name": target_user.first_name,
+            "last_name": target_user.last_name
+        }
+    }
+
+
+@app.delete("/api/admin/users/{user_id}")
+async def delete_admin_user(
+    user_id: str,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a user (admin only)."""
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    result = await db.execute(select(User).where(User.id == user_id))
+    target_user = result.scalar_one_or_none()
+    
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await db.delete(target_user)
+    await db.commit()
+    
+    return {"message": f"User {target_user.email} deleted", "user_id": user_id}
+
+
 class ResearchRequest(BaseModel):
     query: str
 

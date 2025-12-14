@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save, History, Clock, ChevronLeft, FileText, ExternalLink, Check, Circle, AlertTriangle, Trash2 } from 'lucide-react'
+import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Users, Save, History, Clock, ChevronLeft, FileText, ExternalLink, Check, Circle, AlertTriangle, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import axios from 'axios'
 import html2pdf from 'html2pdf.js'
@@ -247,6 +247,15 @@ interface ActiveJob {
   started_at: string
   status: string
   cancelled: boolean
+}
+
+interface UserItem {
+  id: string
+  email: string
+  role: string
+  first_name: string | null
+  last_name: string | null
+  created_at: string | null
 }
 
 interface HistoryDetail {
@@ -530,6 +539,12 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
   const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([])
   const [loadingJobs, setLoadingJobs] = useState(true)
   const [cancellingJob, setCancellingJob] = useState<string | null>(null)
+  const [users, setUsers] = useState<UserItem[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(true)
+  const [updatingUser, setUpdatingUser] = useState<string | null>(null)
+  const [deletingUser, setDeletingUser] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState<UserData | null>(null)
+  const [currentUserLoading, setCurrentUserLoading] = useState(true)
 
   const AVAILABLE_MODELS = [
     { id: 'google/gemini-3-pro-preview', name: 'Google Gemini 3 Pro Preview' },
@@ -553,6 +568,69 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
     }
   }, [])
 
+  const fetchUsers = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoadingUsers(true)
+    try {
+      const response = await axios.get('/api/admin/users')
+      setUsers(response.data.users)
+    } catch (err) {
+      console.error('Failed to fetch users:', err)
+      setError('Failed to load users')
+    } finally {
+      setLoadingUsers(false)
+    }
+  }, [])
+
+  const fetchCurrentUser = useCallback(async () => {
+    setCurrentUserLoading(true)
+    try {
+      const response = await axios.get('/api/auth/me')
+      setCurrentUser(response.data)
+    } catch (err) {
+      console.error('Failed to fetch current user:', err)
+      setError('Failed to identify current user. User management may not work correctly.')
+    } finally {
+      setCurrentUserLoading(false)
+    }
+  }, [])
+
+  const handleUpdateUserRole = async (userId: string, newRole: string) => {
+    setUpdatingUser(userId)
+    setError(null)
+    try {
+      await axios.patch(`/api/admin/users/${userId}`, { role: newRole })
+      await fetchUsers(false)
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.detail || 'Failed to update user role')
+      } else {
+        setError('Failed to update user role')
+      }
+    } finally {
+      setUpdatingUser(null)
+    }
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return
+    }
+    setDeletingUser(userId)
+    setError(null)
+    try {
+      await axios.delete(`/api/admin/users/${userId}`)
+      await fetchUsers(false)
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.detail || 'Failed to delete user')
+      } else {
+        setError('Failed to delete user')
+      }
+    } finally {
+      setDeletingUser(null)
+    }
+  }
+
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -570,9 +648,11 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
     }
     fetchConfig()
     fetchActiveJobs()
+    fetchUsers()
+    fetchCurrentUser()
     const interval = setInterval(fetchActiveJobs, 5000)
     return () => clearInterval(interval)
-  }, [fetchActiveJobs])
+  }, [fetchActiveJobs, fetchUsers, fetchCurrentUser])
 
   const handleCancelJob = async (runId: string) => {
     setCancellingJob(runId)
@@ -820,6 +900,86 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
                 />
               </button>
             </div>
+          </section>
+
+          <section className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+            <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-400" />
+              User Management
+            </h2>
+            {loadingUsers || currentUserLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              </div>
+            ) : users.length === 0 ? (
+              <p className="text-gray-500 text-sm">No users found</p>
+            ) : (
+              <div className="space-y-3">
+                {users.map(user => {
+                  const isCurrentUser = currentUser?.id === user.id
+                  const cannotModify = isCurrentUser || !currentUser
+                  const displayName = user.first_name || user.last_name 
+                    ? `${user.first_name || ''} ${user.last_name || ''}`.trim() 
+                    : null
+                  return (
+                    <div key={user.id} className={`p-4 rounded-lg border ${isCurrentUser ? 'bg-purple-900/20 border-purple-700' : 'bg-gray-700/50 border-gray-600'}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-gray-200">{user.email}</span>
+                            {isCurrentUser && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400">
+                                You
+                              </span>
+                            )}
+                          </div>
+                          {displayName && (
+                            <p className="text-xs text-gray-400 mb-1">{displayName}</p>
+                          )}
+                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                            <span>Created: {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <select
+                            value={user.role}
+                            onChange={(e) => handleUpdateUserRole(user.id, e.target.value)}
+                            disabled={cannotModify || updatingUser === user.id}
+                            className={`px-3 py-1.5 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                              cannotModify 
+                                ? 'bg-gray-600 border-gray-500 text-gray-400 cursor-not-allowed' 
+                                : 'bg-gray-700 border-gray-600 text-gray-200'
+                            }`}
+                          >
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                          {updatingUser === user.id && (
+                            <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                          )}
+                          <button
+                            onClick={() => handleDeleteUser(user.id)}
+                            disabled={cannotModify || deletingUser === user.id}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ${
+                              cannotModify 
+                                ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
+                                : 'bg-red-600 hover:bg-red-700 disabled:opacity-50'
+                            }`}
+                            title={isCurrentUser ? "You cannot delete your own account" : "Delete user"}
+                          >
+                            {deletingUser === user.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </section>
         </div>
 
