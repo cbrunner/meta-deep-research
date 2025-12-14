@@ -1,6 +1,30 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+@theme {
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+  
+  --color-indigo-50: #eef2ff;
+  --color-indigo-100: #e0e7ff;
+  --color-indigo-200: #c7d2fe;
+  --color-indigo-400: #818cf8;
+  --color-indigo-500: #6366f1;
+  --color-indigo-600: #4f46e5;
+  --color-indigo-700: #4338ca;
+  --color-indigo-900: #312e81;
+  --color-indigo-950: #1e1b4b;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -10,30 +34,100 @@ body {
   min-height: 100vh;
 }
 
-/* Print/PDF styles */
-@media print {
-  body {
-    background: white !important;
-    color: black !important;
-    font-size: 12pt;
-    line-height: 1.5;
-  }
+.dark {
+  color-scheme: dark;
+}
 
-  /* Hide non-essential elements */
-  header nav,
-  .no-print,
-  button:not(.print-include) {
+.prose pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+.prose pre::-webkit-scrollbar-track {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+.prose pre::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+
+.prose pre::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+@media print {
+  .no-print {
     display: none !important;
   }
-
-  /* Report container adjustments */
+  
   .print-container {
+    box-shadow: none !important;
+    border-radius: 0 !important;
     max-width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
   }
-
-  /* Typography adjustments for print */
+  
+  .page-break {
+    break-before: page;
+  }
+  
+  .avoid-break {
+    break-inside: avoid;
+  }
+  
+  body {
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #000;
+    background: #fff !important;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    break-after: avoid;
+    color: #000;
+  }
+  
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+  
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #666;
+    word-break: break-all;
+  }
+  
+  pre, code {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  
+  pre {
+    border: 1px solid #ddd;
+    background: #f5f5f5 !important;
+  }
+  
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  
+  th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+  }
+  
+  blockquote {
+    border-left: 4px solid #6366f1;
+    background: #f5f5f5;
+    padding: 1rem;
+    margin: 1rem 0;
+  }
+  
   .prose {
     max-width: 100% !important;
     font-size: 11pt !important;
@@ -41,17 +135,14 @@ body {
 
   .prose h1 {
     font-size: 18pt !important;
-    page-break-after: avoid;
   }
 
   .prose h2 {
     font-size: 14pt !important;
-    page-break-after: avoid;
   }
 
   .prose h3 {
     font-size: 12pt !important;
-    page-break-after: avoid;
   }
 
   .prose p,
@@ -60,49 +151,21 @@ body {
     widows: 3;
   }
 
-  .prose blockquote {
-    border-left: 2px solid #6366f1 !important;
-    background: #f8fafc !important;
-    padding: 0.5rem 1rem !important;
-  }
-
-  .prose pre {
-    background: #f1f5f9 !important;
-    color: #1e293b !important;
-    border: 1px solid #e2e8f0 !important;
-    padding: 0.5rem !important;
-    font-size: 9pt !important;
-    page-break-inside: avoid;
-  }
-
-  .prose table {
-    page-break-inside: avoid;
-  }
-
+  .prose table,
   .prose img {
-    max-width: 100% !important;
     page-break-inside: avoid;
   }
 
-  /* Links for print - show URL */
-  .prose a[href^="http"]::after {
-    content: " (" attr(href) ")";
-    font-size: 9pt;
-    color: #64748b;
-  }
-
-  /* Page margins */
-  @page {
-    margin: 1in;
-  }
-
-  /* Gradient headers become solid for print */
   .bg-gradient-to-r {
     background: #1e293b !important;
   }
 
-  /* Citation list print styling */
   .citation-list li {
     page-break-inside: avoid;
   }
+}
+
+@page {
+  margin: 2cm;
+  size: A4 portrait;
 }
