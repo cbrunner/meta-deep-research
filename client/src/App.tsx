@@ -227,6 +227,7 @@ interface AdminConfig {
   synthesizer_model: string
   synthesizer_prompt: string
   show_live_agent_feeds: boolean
+  agent_timeout_minutes: number
 }
 
 interface HistoryItem {
@@ -672,6 +673,22 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
                   }`}
                 />
               </button>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-700 pt-6">
+            <h3 className="text-lg font-medium text-gray-300 mb-4">Agent Settings</h3>
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Agent Timeout (minutes)</label>
+              <input
+                type="number"
+                min={5}
+                max={1440}
+                value={config?.agent_timeout_minutes || 120}
+                onChange={(e) => setConfig(c => c ? { ...c, agent_timeout_minutes: parseInt(e.target.value) || 120 } : null)}
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Maximum time (in minutes) each research agent is allowed to run before timing out. Valid range: 5-1440 minutes (24 hours).</p>
             </div>
           </div>
 

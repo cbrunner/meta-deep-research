@@ -100,6 +100,8 @@ class MetaResearchState(TypedDict):
     consensus_report: Optional[str]
     overall_status: str
     citations: Optional[List[dict]]
+    research_started_at: Optional[float]
+    agent_timeout_minutes: Optional[int]
 
 
 def extract_citations_from_markdown(text: str, source_agent: str) -> List[dict]:
@@ -252,8 +254,21 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
             emit_live_update(run_id, "gemini", "plan_step", {"step": "submitting", "message": "Research query submitted", "completed": True})
             emit_live_update(run_id, "gemini", "plan_step", {"step": "analyzing", "message": "Analyzing research scope...", "completed": False})
         
+        import time
+        started_at = state.get("research_started_at")
+        timeout_minutes = state.get("agent_timeout_minutes", 120)
+        timeout_seconds = timeout_minutes * 60
+        
         poll_count = 0
         while True:
+            if started_at and (time.time() - started_at) > timeout_seconds:
+                gemini_data["status"] = "failed"
+                gemini_data["error"] = f"Agent timed out after {timeout_minutes} minutes"
+                if run_id:
+                    emit_live_update(run_id, "gemini", "error", {"message": gemini_data["error"]})
+                print(f"[GEMINI] TIMEOUT: {gemini_data['error']}")
+                break
+            
             result = await client.aio.interactions.get(interaction_id)
             poll_count += 1
             print(f"[GEMINI] Poll #{poll_count}: status={result.status}")
@@ -323,10 +338,13 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
         if run_id:
             emit_live_update(run_id, "openai", "reasoning", {"message": "Connecting to OpenRouter API..."})
         
+        timeout_minutes = state.get("agent_timeout_minutes", 120)
+        timeout_seconds = timeout_minutes * 60
+        
         client = AsyncOpenAI(
             api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
             base_url=AI_INTEGRATIONS_OPENROUTER_BASE_URL,
-            timeout=3600.0
+            timeout=float(timeout_seconds)
         )
         
         if run_id:
@@ -418,7 +436,10 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
         if run_id:
             emit_live_update(run_id, "perplexity", "source", {"url": "Searching the web...", "title": "Web Search"})
         
-        async with httpx.AsyncClient(timeout=600.0) as http_client:
+        timeout_minutes = state.get("agent_timeout_minutes", 120)
+        timeout_seconds = timeout_minutes * 60
+        
+        async with httpx.AsyncClient(timeout=float(timeout_seconds)) as http_client:
             response = await http_client.post(
                 "https://api.perplexity.ai/chat/completions",
                 headers={
@@ -610,12 +631,18 @@ Format with clear headers, bullet points, and proper Markdown formatting."""
 
 async def start_research_node(state: MetaResearchState) -> MetaResearchState:
     """Initialize research state after approval."""
+    import time
+    config = await get_supervisor_config()
+    timeout_minutes = config.agent_timeout_minutes if config else 120
+    
     return {
         **state,
         "gemini_data": {"status": "polling", "job_id": None, "output": None, "error": None, "citations": None},
         "openai_data": {"status": "polling", "job_id": None, "output": None, "error": None, "citations": None},
         "perplexity_data": {"status": "polling", "job_id": None, "output": None, "error": None, "citations": None},
-        "overall_status": "researching"
+        "overall_status": "researching",
+        "research_started_at": time.time(),
+        "agent_timeout_minutes": timeout_minutes
     }
 
 
