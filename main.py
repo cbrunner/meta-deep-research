@@ -535,14 +535,34 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
         if run_id:
             emit_live_update(run_id, "openai", "reasoning", {"message": "Submitting deep research query..."})
         
-        response = await client.chat.completions.create(
-            model="openai/o3-deep-research",
-            max_tokens=100000,
-            messages=[{
-                "role": "user",
-                "content": query
-            }]
-        )
+        max_retries = 3
+        response = None
+        last_error = None
+        for retry in range(max_retries):
+            try:
+                response = await client.chat.completions.create(
+                    model="openai/o3-deep-research",
+                    max_tokens=100000,
+                    messages=[{
+                        "role": "user",
+                        "content": query
+                    }]
+                )
+                break
+            except Exception as api_error:
+                last_error = api_error
+                error_str = str(api_error)
+                if "500" in error_str or "Internal server error" in error_str.lower():
+                    retry_delay = 5 * (retry + 1)
+                    print(f"[OPENAI] API error (attempt {retry + 1}/{max_retries}): {error_str[:100]}. Retrying in {retry_delay}s...")
+                    if run_id:
+                        emit_live_update(run_id, "openai", "reasoning", {"message": f"API error, retrying ({retry + 1}/{max_retries})..."})
+                    await asyncio.sleep(retry_delay)
+                else:
+                    raise api_error
+        
+        if response is None:
+            raise last_error
         
         openai_data["job_id"] = response.id[:8] if response.id else str(uuid.uuid4())[:8]
         print(f"[OPENAI] Response received, id: {response.id}")
@@ -631,23 +651,44 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
         timeout_minutes = state.get("agent_timeout_minutes", 120)
         timeout_seconds = timeout_minutes * 60
         
+        max_retries = 3
+        data = None
+        last_error = None
+        
         async with httpx.AsyncClient(timeout=float(timeout_seconds)) as http_client:
-            response = await http_client.post(
-                "https://api.perplexity.ai/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "sonar-deep-research",
-                    "messages": [{
-                        "role": "user",
-                        "content": query
-                    }]
-                }
-            )
-            response.raise_for_status()
-            data = response.json()
+            for retry in range(max_retries):
+                try:
+                    response = await http_client.post(
+                        "https://api.perplexity.ai/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": "sonar-deep-research",
+                            "messages": [{
+                                "role": "user",
+                                "content": query
+                            }]
+                        }
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    break
+                except Exception as api_error:
+                    last_error = api_error
+                    error_str = str(api_error)
+                    if "500" in error_str or "Internal server error" in error_str.lower() or (hasattr(api_error, 'response') and getattr(api_error.response, 'status_code', 0) == 500):
+                        retry_delay = 5 * (retry + 1)
+                        print(f"[PERPLEXITY] API error (attempt {retry + 1}/{max_retries}): {error_str[:100]}. Retrying in {retry_delay}s...")
+                        if run_id:
+                            emit_live_update(run_id, "perplexity", "source", {"url": f"API error, retrying ({retry + 1}/{max_retries})...", "title": "Retry"})
+                        await asyncio.sleep(retry_delay)
+                    else:
+                        raise api_error
+            
+            if data is None:
+                raise last_error
             
             perplexity_data["status"] = "completed"
             perplexity_data["output"] = data["choices"][0]["message"]["content"]

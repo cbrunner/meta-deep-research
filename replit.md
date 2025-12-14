@@ -118,12 +118,12 @@ This filtering is automatic and logged in the console output.
 
 ## API Error Resilience
 
-The Gemini agent includes retry logic for transient API errors:
+All three research agents (Gemini, OpenAI, Perplexity) include retry logic for transient API errors:
 - **500 Internal Server Errors**: Automatically retried up to 3 times with exponential backoff (5s, 10s, 15s delays)
 - **Other Errors**: Non-500 errors are raised immediately without retry
 - **Logging**: Each retry attempt is logged with the error message for debugging
 
-This helps handle temporary Google API instability without failing the entire research job.
+This helps handle temporary API instability without failing the entire research job.
 
 Available models via OpenRouter:
 - google/gemini-3-pro-preview - Google Gemini 3 Pro Preview
