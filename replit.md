@@ -87,9 +87,9 @@ Set these environment variables before starting to create the first admin:
 
 Admins can configure:
 - **Supervisor Model**: Model used to create research plans (via OpenRouter)
-- **Supervisor Prompt**: Prompt template for research planning (use `{query}` placeholder)
+- **Supervisor Prompt**: Prompt template for research planning (use `{query}` and `{current_date}` placeholders)
 - **Synthesizer Model**: Model used to synthesize research reports (via OpenRouter)
-- **Synthesizer Prompt**: Prompt template for synthesizing consensus reports (use `{query}` for the original query and `{combined_reports}` for the agent reports)
+- **Synthesizer Prompt**: Prompt template for synthesizing consensus reports (use `{query}` for the original query, `{combined_reports}` for the agent reports, and `{current_date}` for the current date)
 - **Show Live Agent Feeds**: Toggle to display real-time streaming updates from each research agent during research
 - **Agent Timeout (minutes)**: Maximum time each research agent is allowed to run before timing out (default: 120 minutes, range: 5-1440 minutes)
 - **Active Research Jobs**: View all currently running research jobs with user email, query preview, and start time. Admins can cancel any running job.

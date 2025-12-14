@@ -250,15 +250,17 @@ async def get_supervisor_config() -> Optional[SupervisorConfig]:
 async def supervisor_node(state: MetaResearchState) -> MetaResearchState:
     """Supervisor: Creates research plan using OpenRouter via Replit AI Integrations."""
     query = state["user_query"]
+    current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
     
     print(f"\n{'='*60}")
     print(f"[SUPERVISOR] === SUPERVISOR NODE START ===")
     print(f"[SUPERVISOR] INPUT query: {query[:500]}{'...' if len(query) > 500 else ''}")
+    print(f"[SUPERVISOR] Current date: {current_date}")
     print(f"{'='*60}")
     
     config = await get_supervisor_config()
     model = config.supervisor_model if config else "anthropic/claude-sonnet-4.5"
-    prompt_template = config.supervisor_prompt if config else """You are a research supervisor. Create a brief research plan for this query:
+    prompt_template = config.supervisor_prompt if config else """You are a research supervisor. Today's date is {current_date}. Create a brief research plan for this query:
 
 Query: {query}
 
@@ -275,7 +277,7 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
                 api_key=AI_INTEGRATIONS_OPENROUTER_API_KEY,
                 base_url=AI_INTEGRATIONS_OPENROUTER_BASE_URL
             )
-            prompt = prompt_template.replace("{query}", query)
+            prompt = prompt_template.replace("{query}", query).replace("{current_date}", current_date)
             response = await client.chat.completions.create(
                 model=model,
                 max_tokens=65536,
@@ -643,9 +645,12 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
 
 async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     """Synthesize all research reports using OpenRouter via Replit AI Integrations."""
+    current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    
     print(f"\n{'='*60}")
     print(f"[SYNTHESIZER] === SYNTHESIZER NODE START ===")
     print(f"[SYNTHESIZER] INPUT query: {state['user_query'][:500]}{'...' if len(state['user_query']) > 500 else ''}")
+    print(f"[SYNTHESIZER] Current date: {current_date}")
     print(f"{'='*60}")
     
     gemini_output = strip_thinking_tokens(state["gemini_data"].get("output", "Not available"), "Gemini")
@@ -685,7 +690,7 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     config = await get_supervisor_config()
     model = config.synthesizer_model if config else "anthropic/claude-sonnet-4.5"
     
-    default_synthesizer_prompt = """You are a research synthesis expert. Analyze the following research reports from three different AI research agents and create a comprehensive consensus report.
+    default_synthesizer_prompt = """You are a research synthesis expert. Today's date is {current_date}. Analyze the following research reports from three different AI research agents and create a comprehensive consensus report.
 
 Original Query: {query}
 
@@ -703,7 +708,7 @@ Create a well-structured consensus report in Markdown format that:
 Format with clear headers, bullet points, and proper Markdown formatting."""
     
     prompt_template = config.synthesizer_prompt if config and config.synthesizer_prompt else default_synthesizer_prompt
-    prompt = prompt_template.replace("{query}", state['user_query']).replace("{combined_reports}", combined_reports)
+    prompt = prompt_template.replace("{query}", state['user_query']).replace("{combined_reports}", combined_reports).replace("{current_date}", current_date)
     
     if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
         print(f"[SYNTHESIZER] OpenRouter not configured, using fallback synthesis")
