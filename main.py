@@ -1742,49 +1742,62 @@ async def generate_pdf(
         if not item.consensus_report:
             raise HTTPException(status_code=400, detail="Report not yet complete")
         
-        # Convert markdown to HTML
-        md = markdown.Markdown(extensions=['tables', 'fenced_code', 'toc'])
-        content_html = md.convert(item.consensus_report)
-        
-        # Parse citations from JSON if stored
-        citations = []
-        if item.citations:
-            try:
-                citations = json.loads(item.citations) if isinstance(item.citations, str) else item.citations
-            except:
-                pass
-        
-        # Render template
-        env = Environment(loader=FileSystemLoader('templates'))
-        template = env.get_template('pdf_report.html')
-        html = template.render(
-            title=item.query,
-            content=content_html,
-            citations=citations,
-            created_at=item.created_at.strftime("%B %d, %Y") if item.created_at else "Unknown"
-        )
-        
-        # Generate PDF with pyppeteer
-        browser = await pyppeteer_launch(
-            headless=True,
-            args=['--no-sandbox', '--disable-setuid-sandbox']
-        )
-        page = await browser.newPage()
-        await page.setContent(html, waitUntil='networkidle0')
-        pdf_bytes = await page.pdf({
-            'format': 'A4',
-            'printBackground': True,
-            'margin': {'top': '2cm', 'bottom': '2cm', 'left': '2cm', 'right': '2cm'}
-        })
-        await browser.close()
-        
-        # Return PDF
-        filename = f"research-report-{run_id[:8]}.pdf"
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
+        browser = None
+        try:
+            # Convert markdown to HTML
+            md = markdown.Markdown(extensions=['tables', 'fenced_code', 'toc'])
+            content_html = md.convert(item.consensus_report)
+            
+            # Parse citations from JSON if stored
+            citations = []
+            if item.citations:
+                try:
+                    citations = json.loads(item.citations) if isinstance(item.citations, str) else item.citations
+                except:
+                    pass
+            
+            # Render template
+            env = Environment(loader=FileSystemLoader('templates'))
+            template = env.get_template('pdf_report.html')
+            html = template.render(
+                title=item.query,
+                content=content_html,
+                citations=citations,
+                created_at=item.created_at.strftime("%B %d, %Y") if item.created_at else "Unknown"
+            )
+            
+            # Generate PDF with pyppeteer
+            print(f"[PDF] Launching browser for run_id: {run_id}")
+            browser = await pyppeteer_launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            )
+            page = await browser.newPage()
+            await page.setContent(html, waitUntil='networkidle0')
+            pdf_bytes = await page.pdf({
+                'format': 'A4',
+                'printBackground': True,
+                'margin': {'top': '2cm', 'bottom': '2cm', 'left': '2cm', 'right': '2cm'}
+            })
+            await browser.close()
+            browser = None
+            print(f"[PDF] Successfully generated PDF for run_id: {run_id}, size: {len(pdf_bytes)} bytes")
+            
+            # Return PDF
+            filename = f"research-report-{run_id[:8]}.pdf"
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+        except Exception as e:
+            print(f"[PDF] ERROR generating PDF for run_id {run_id}: {type(e).__name__}: {str(e)}")
+            if browser:
+                try:
+                    await browser.close()
+                except:
+                    pass
+            raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
 
 
 @app.get("/api/health")
