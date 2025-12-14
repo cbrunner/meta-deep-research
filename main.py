@@ -112,6 +112,38 @@ def get_active_jobs_list() -> List[Dict]:
     ]
 
 
+async def restore_active_jobs_from_db():
+    """Restore active jobs from database on server startup.
+    
+    Jobs with overall_status='researching' and no completed_at timestamp are considered active.
+    """
+    from database import ResearchHistory, User
+    
+    async with async_session() as db:
+        result = await db.execute(
+            select(ResearchHistory, User.email).join(User, ResearchHistory.user_id == User.id).where(
+                ResearchHistory.overall_status == "researching",
+                ResearchHistory.completed_at.is_(None)
+            )
+        )
+        active_research = result.all()
+        
+        for history, user_email in active_research:
+            if history.run_id not in active_jobs:
+                job = ActiveJob(
+                    history.run_id,
+                    history.user_id,
+                    user_email,
+                    history.query
+                )
+                job.started_at = history.created_at or datetime.now(timezone.utc)
+                active_jobs[history.run_id] = job
+                print(f"Restored active job: {history.run_id} for {user_email}")
+        
+        if active_research:
+            print(f"Restored {len(active_research)} active research jobs from database")
+
+
 def emit_live_update(run_id: str, agent: str, update_type: str, data: Any):
     """Emit a live update for a specific research run."""
     update = LiveUpdate(agent, update_type, data)
@@ -855,6 +887,8 @@ async def lifespan(app: FastAPI):
             await db.commit()
             print("Created default supervisor config")
     
+    await restore_active_jobs_from_db()
+    
     async with AsyncSqliteSaver.from_conn_string("replit_state.db") as saver:
         checkpointer = saver
         await saver.setup()
@@ -1365,6 +1399,22 @@ async def save_research_history(run_id: str, user_id: str, state: dict):
 async def run_research(run_id: str, user_id: str, user_email: str, query: str, current_state: dict, config: dict):
     """Run the research graph asynchronously."""
     register_active_job(run_id, user_id, user_email, query)
+    
+    try:
+        async with async_session() as db:
+            history = ResearchHistory(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                run_id=run_id,
+                query=query,
+                overall_status="researching"
+            )
+            db.add(history)
+            await db.commit()
+            print(f"Created research history entry for {run_id}")
+    except Exception as e:
+        print(f"Error creating initial research history for {run_id}: {e}")
+    
     final_state = current_state
     try:
         async for event in research_graph.astream(current_state, config, stream_mode="values"):
