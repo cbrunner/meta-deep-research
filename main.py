@@ -410,6 +410,7 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
         timeout_seconds = timeout_minutes * 60
         
         poll_count = 0
+        max_retries = 3
         while True:
             if run_id and is_job_cancelled(run_id):
                 gemini_data["status"] = "failed"
@@ -426,7 +427,27 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
                 print(f"[GEMINI] TIMEOUT: {gemini_data['error']}")
                 break
             
-            result = await client.aio.interactions.get(interaction_id)
+            result = None
+            last_error = None
+            for retry in range(max_retries):
+                try:
+                    result = await client.aio.interactions.get(interaction_id)
+                    break
+                except Exception as poll_error:
+                    last_error = poll_error
+                    error_str = str(poll_error)
+                    if "500" in error_str or "Internal server error" in error_str.lower():
+                        retry_delay = 5 * (retry + 1)
+                        print(f"[GEMINI] Poll error (attempt {retry + 1}/{max_retries}): {error_str[:100]}. Retrying in {retry_delay}s...")
+                        if run_id:
+                            emit_live_update(run_id, "gemini", "progress", {"status": f"API error, retrying ({retry + 1}/{max_retries})..."})
+                        await asyncio.sleep(retry_delay)
+                    else:
+                        raise poll_error
+            
+            if result is None:
+                raise last_error
+            
             poll_count += 1
             print(f"[GEMINI] Poll #{poll_count}: status={result.status}")
             
