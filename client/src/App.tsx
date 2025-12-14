@@ -1068,6 +1068,38 @@ function HistoryPanel({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const handleDownloadMarkdown = () => {
+    if (!selectedItem?.consensus_report) return
+    
+    let content = selectedItem.consensus_report
+    
+    const blob = new Blob([content], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `research-report-${new Date().toISOString().split('T')[0]}.md`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadPDF = () => {
+    if (!selectedItem?.consensus_report) return
+    const element = document.getElementById('history-report-content')
+    if (!element) return
+    
+    const opt = {
+      margin: [10, 10, 10, 10] as [number, number, number, number],
+      filename: `research-report-${new Date().toISOString().split('T')[0]}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+    }
+    
+    html2pdf().set(opt).from(element).save()
+  }
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -1146,8 +1178,26 @@ function HistoryPanel({ onClose }: { onClose: () => void }) {
 
               {selectedItem.consensus_report && (
                 <div>
-                  <h3 className="text-lg font-medium text-gray-300 mb-2">Consensus Report</h3>
-                  <div className="bg-gray-700 p-4 rounded-lg prose prose-invert max-w-none max-h-96 overflow-y-auto">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-medium text-gray-300">Consensus Report</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleDownloadMarkdown}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm transition-colors"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Markdown
+                      </button>
+                      <button
+                        onClick={handleDownloadPDF}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm transition-colors"
+                      >
+                        <FileText className="w-4 h-4" />
+                        PDF
+                      </button>
+                    </div>
+                  </div>
+                  <div id="history-report-content" className="bg-gray-700 p-4 rounded-lg prose prose-invert max-w-none max-h-96 overflow-y-auto">
                     <ReactMarkdown>{selectedItem.consensus_report}</ReactMarkdown>
                   </div>
                 </div>
