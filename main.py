@@ -53,6 +53,65 @@ live_updates_store: Dict[str, List[LiveUpdate]] = defaultdict(list)
 live_update_events: Dict[str, asyncio.Event] = {}
 
 
+class ActiveJob:
+    def __init__(self, run_id: str, user_id: str, user_email: str, query: str):
+        self.run_id = run_id
+        self.user_id = user_id
+        self.user_email = user_email
+        self.query = query
+        self.started_at = datetime.now(timezone.utc)
+        self.status = "researching"
+        self.cancelled = False
+
+
+active_jobs: Dict[str, ActiveJob] = {}
+cancelled_jobs: set = set()
+
+
+def register_active_job(run_id: str, user_id: str, user_email: str, query: str):
+    """Register a new active research job."""
+    active_jobs[run_id] = ActiveJob(run_id, user_id, user_email, query)
+
+
+def unregister_active_job(run_id: str):
+    """Unregister a completed or cancelled job."""
+    if run_id in active_jobs:
+        del active_jobs[run_id]
+    if run_id in cancelled_jobs:
+        cancelled_jobs.discard(run_id)
+
+
+def cancel_job(run_id: str) -> bool:
+    """Mark a job as cancelled. Returns True if job was found."""
+    if run_id in active_jobs:
+        active_jobs[run_id].cancelled = True
+        active_jobs[run_id].status = "cancelled"
+        cancelled_jobs.add(run_id)
+        return True
+    return False
+
+
+def is_job_cancelled(run_id: str) -> bool:
+    """Check if a job has been cancelled."""
+    return run_id in cancelled_jobs
+
+
+def get_active_jobs_list() -> List[Dict]:
+    """Get list of all active research jobs."""
+    return [
+        {
+            "run_id": job.run_id,
+            "user_id": job.user_id,
+            "user_email": job.user_email,
+            "query": job.query[:100] + ("..." if len(job.query) > 100 else ""),
+            "started_at": job.started_at.isoformat(),
+            "status": job.status,
+            "cancelled": job.cancelled
+        }
+        for job in active_jobs.values()
+    ]
+
+
 def emit_live_update(run_id: str, agent: str, update_type: str, data: Any):
     """Emit a live update for a specific research run."""
     update = LiveUpdate(agent, update_type, data)
@@ -261,6 +320,13 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
         
         poll_count = 0
         while True:
+            if run_id and is_job_cancelled(run_id):
+                gemini_data["status"] = "failed"
+                gemini_data["error"] = "Cancelled by admin"
+                emit_live_update(run_id, "gemini", "error", {"message": "Cancelled by admin"})
+                print(f"[GEMINI] CANCELLED by admin")
+                break
+            
             if started_at and (time.time() - started_at) > timeout_seconds:
                 gemini_data["status"] = "failed"
                 gemini_data["error"] = f"Agent timed out after {timeout_minutes} minutes"
@@ -923,6 +989,23 @@ async def update_admin_config(
     }
 
 
+@app.get("/api/admin/jobs")
+async def get_admin_jobs(user: User = Depends(require_admin)):
+    """Get list of all active research jobs (admin only)."""
+    return {
+        "jobs": get_active_jobs_list()
+    }
+
+
+@app.post("/api/admin/jobs/{run_id}/cancel")
+async def cancel_admin_job(run_id: str, user: User = Depends(require_admin)):
+    """Cancel an active research job (admin only)."""
+    if cancel_job(run_id):
+        emit_live_update(run_id, "system", "cancelled", {"message": "Cancelled by admin", "admin_email": user.email})
+        return {"message": f"Job {run_id} has been cancelled", "run_id": run_id}
+    raise HTTPException(status_code=404, detail="Job not found or already completed")
+
+
 class ResearchRequest(BaseModel):
     query: str
 
@@ -948,7 +1031,9 @@ async def api_root():
             "POST /api/auth/logout": "Log out",
             "GET /api/auth/me": "Get current user",
             "GET /api/admin/config": "Get admin config (admin only)",
-            "PATCH /api/admin/config": "Update admin config (admin only)"
+            "PATCH /api/admin/config": "Update admin config (admin only)",
+            "GET /api/admin/jobs": "Get active research jobs (admin only)",
+            "POST /api/admin/jobs/{run_id}/cancel": "Cancel a research job (admin only)"
         }
     }
 
@@ -1024,7 +1109,7 @@ async def start_research_immediately(request: ResearchRequest, user: User = Depe
     try:
         await research_graph.aupdate_state(config, initial_state)
         
-        asyncio.create_task(run_research(run_id, user.id, initial_state, config))
+        asyncio.create_task(run_research(run_id, user.id, user.email, request.query, initial_state, config))
         
         return {
             "run_id": run_id,
@@ -1057,7 +1142,8 @@ async def approve_research(run_id: str, user: User = Depends(get_current_user)):
         approved_state = {**current_state, "overall_status": "approved"}
         await plan_graph.aupdate_state(config, approved_state)
         
-        asyncio.create_task(run_research(run_id, user.id, current_state, config))
+        query = current_state.get("user_query", "")
+        asyncio.create_task(run_research(run_id, user.id, user.email, query, current_state, config))
         
         return {
             "run_id": run_id,
@@ -1112,15 +1198,27 @@ async def save_research_history(run_id: str, user_id: str, state: dict):
         print(f"Error saving research history for {run_id}: {e}")
 
 
-async def run_research(run_id: str, user_id: str, current_state: dict, config: dict):
+async def run_research(run_id: str, user_id: str, user_email: str, query: str, current_state: dict, config: dict):
     """Run the research graph asynchronously."""
+    register_active_job(run_id, user_id, user_email, query)
     final_state = current_state
     try:
         async for event in research_graph.astream(current_state, config, stream_mode="values"):
             final_state = event
+            if is_job_cancelled(run_id):
+                final_state["overall_status"] = "cancelled"
+                final_state["gemini_data"]["status"] = "failed"
+                final_state["gemini_data"]["error"] = "Cancelled by admin"
+                final_state["openai_data"]["status"] = "failed"
+                final_state["openai_data"]["error"] = "Cancelled by admin"
+                final_state["perplexity_data"]["status"] = "failed"
+                final_state["perplexity_data"]["error"] = "Cancelled by admin"
+                break
     except Exception as e:
         print(f"Research error for {run_id}: {e}")
         final_state["overall_status"] = "failed"
+    finally:
+        unregister_active_job(run_id)
     
     await save_research_history(run_id, user_id, final_state)
 
