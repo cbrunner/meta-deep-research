@@ -24,9 +24,10 @@ This application provides a unified research orchestration system that:
 
 ### Frontend (React/Vite)
 - **Framework**: React with TypeScript
-- **Styling**: Tailwind CSS
+- **Styling**: Tailwind CSS with Typography plugin
 - **Icons**: Lucide React
-- **Markdown**: react-markdown
+- **Markdown**: react-markdown with remark-gfm, rehype-sanitize
+- **Syntax Highlighting**: react-syntax-highlighter (Prism with oneDark theme)
 
 ## Project Structure
 
@@ -37,14 +38,32 @@ This application provides a unified research orchestration system that:
 ├── client/
 │   ├── src/
 │   │   ├── App.tsx        # Main React component with login UI + admin settings
-│   │   ├── index.css      # Tailwind imports
-│   │   └── main.tsx       # React entry point
+│   │   ├── index.css      # Tailwind imports + print/PDF styles
+│   │   ├── main.tsx       # React entry point
+│   │   └── components/    # Report rendering components
+│   │       ├── ReportRenderer.tsx     # Enhanced Markdown renderer with syntax highlighting
+│   │       ├── ReportContainer.tsx    # Full report wrapper with header/footer
+│   │       ├── CitationList.tsx       # Formatted reference list
+│   │       ├── Callout.tsx            # Styled callout boxes (info, warning, etc.)
+│   │       ├── KeyFindingCard.tsx     # Gradient cards for key findings
+│   │       ├── AgentSourceCard.tsx    # Agent-specific styled cards
+│   │       └── ReportSection.tsx      # Section wrappers with variants
 │   ├── dist/              # Built frontend (served by FastAPI)
 │   ├── vite.config.ts     # Vite configuration
 │   └── package.json       # Frontend dependencies
 ├── pyproject.toml         # Python dependencies
 └── replit_state.db        # SQLite persistence (auto-created)
 ```
+
+## Report Styling
+
+Research reports use consulting-firm quality styling with:
+- **Typography**: Tailwind Typography plugin for professional prose styling
+- **Code Blocks**: Syntax highlighting with Prism (oneDark theme) and line numbers
+- **Tables**: Enhanced styling with hover states and proper borders
+- **Blockquotes**: Indigo-styled callout boxes for key findings
+- **Links**: External link icons and opens in new tabs
+- **Print/PDF**: Optimized styles for print media with proper page breaks
 
 ## Authentication
 
