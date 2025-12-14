@@ -215,6 +215,31 @@ def detect_thinking_tokens(text: str, agent_name: str) -> dict:
     return {"found": len(found_patterns) > 0, "patterns": found_patterns}
 
 
+def strip_thinking_tokens(text: str, agent_name: str = "") -> str:
+    """Remove thinking tokens from agent output before synthesis."""
+    if not text:
+        return text
+    
+    original_length = len(text)
+    
+    patterns = [
+        (r'<think>.*?</think>', re.DOTALL | re.IGNORECASE),
+        (r'<thinking>.*?</thinking>', re.DOTALL | re.IGNORECASE),
+        (r'<reasoning>.*?</reasoning>', re.DOTALL | re.IGNORECASE),
+    ]
+    
+    for pattern, flags in patterns:
+        text = re.sub(pattern, '', text, flags=flags)
+    
+    text = text.strip()
+    
+    if len(text) != original_length:
+        removed_chars = original_length - len(text)
+        print(f"[SYNTHESIZER] Stripped {removed_chars} chars of thinking tokens from {agent_name}")
+    
+    return text
+
+
 async def get_supervisor_config() -> Optional[SupervisorConfig]:
     """Fetch supervisor config from database."""
     async with async_session() as db:
@@ -623,9 +648,9 @@ async def synthesizer_node(state: MetaResearchState) -> MetaResearchState:
     print(f"[SYNTHESIZER] INPUT query: {state['user_query'][:500]}{'...' if len(state['user_query']) > 500 else ''}")
     print(f"{'='*60}")
     
-    gemini_output = state["gemini_data"].get("output", "Not available")
-    openai_output = state["openai_data"].get("output", "Not available")
-    perplexity_output = state["perplexity_data"].get("output", "Not available")
+    gemini_output = strip_thinking_tokens(state["gemini_data"].get("output", "Not available"), "Gemini")
+    openai_output = strip_thinking_tokens(state["openai_data"].get("output", "Not available"), "OpenAI")
+    perplexity_output = strip_thinking_tokens(state["perplexity_data"].get("output", "Not available"), "Perplexity")
     
     gemini_status = state["gemini_data"].get("status", "unknown")
     openai_status = state["openai_data"].get("status", "unknown")
