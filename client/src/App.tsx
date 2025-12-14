@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Users, Save, History, Clock, ChevronLeft, FileText, ExternalLink, Check, Circle, AlertTriangle, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import axios from 'axios'
-import html2pdf from 'html2pdf.js'
 import { ReportContainer } from './components/ReportContainer'
 
 axios.defaults.withCredentials = true
@@ -1145,20 +1144,26 @@ function HistoryPanel({ onClose }: { onClose: () => void }) {
     URL.revokeObjectURL(url)
   }
 
-  const handleDownloadPDF = () => {
-    if (!selectedItem?.consensus_report) return
-    const element = document.getElementById('history-report-content')
-    if (!element) return
+  const handleDownloadPDF = async () => {
+    if (!selectedItem?.run_id) return
     
-    const opt = {
-      margin: [10, 10, 10, 10] as [number, number, number, number],
-      filename: `research-report-${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+    try {
+      const response = await axios.get(`/api/research/${selectedItem.run_id}/pdf`, {
+        responseType: 'blob'
+      })
+      
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `research-report-${selectedItem.run_id.slice(0, 8)}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('PDF download failed:', err)
     }
-    
-    html2pdf().set(opt).from(element).save()
   }
 
   if (loading) {
@@ -1594,20 +1599,26 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
-  const handleDownloadPDF = () => {
-    if (!status?.consensus_report) return
-    const element = document.getElementById('consensus-report-content')
-    if (!element) return
+  const handleDownloadPDF = async () => {
+    if (!status?.run_id) return
     
-    const opt = {
-      margin: [10, 10, 10, 10] as [number, number, number, number],
-      filename: `research-report-${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+    try {
+      const response = await axios.get(`/api/research/${status.run_id}/pdf`, {
+        responseType: 'blob'
+      })
+      
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `research-report-${status.run_id.slice(0, 8)}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('PDF download failed:', err)
     }
-    
-    html2pdf().set(opt).from(element).save()
   }
 
   if (authLoading) {

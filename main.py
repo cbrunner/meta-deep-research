@@ -21,6 +21,9 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 import httpx
 from openai import AsyncOpenAI
 from google import genai
+import markdown
+from jinja2 import Environment, FileSystemLoader
+from pyppeteer import launch as pyppeteer_launch
 
 from datetime import datetime, timezone
 from database import init_db, get_db, User, SupervisorConfig, ResearchHistory, async_session, engine
@@ -1717,6 +1720,71 @@ async def get_research_history_detail(
             "created_at": item.created_at.isoformat() if item.created_at else None,
             "completed_at": item.completed_at.isoformat() if item.completed_at else None
         }
+
+
+@app.get("/api/research/{run_id}/pdf")
+async def generate_pdf(
+    run_id: str,
+    user: User = Depends(get_current_user)
+):
+    """Generate a PDF of the research report."""
+    async with async_session() as db:
+        result = await db.execute(
+            select(ResearchHistory)
+            .where(ResearchHistory.run_id == run_id)
+            .where(ResearchHistory.user_id == user.id)
+        )
+        item = result.scalar_one_or_none()
+        
+        if not item:
+            raise HTTPException(status_code=404, detail="Research not found")
+        
+        if not item.consensus_report:
+            raise HTTPException(status_code=400, detail="Report not yet complete")
+        
+        # Convert markdown to HTML
+        md = markdown.Markdown(extensions=['tables', 'fenced_code', 'toc'])
+        content_html = md.convert(item.consensus_report)
+        
+        # Parse citations from JSON if stored
+        citations = []
+        if item.citations:
+            try:
+                citations = json.loads(item.citations) if isinstance(item.citations, str) else item.citations
+            except:
+                pass
+        
+        # Render template
+        env = Environment(loader=FileSystemLoader('templates'))
+        template = env.get_template('pdf_report.html')
+        html = template.render(
+            title=item.query,
+            content=content_html,
+            citations=citations,
+            created_at=item.created_at.strftime("%B %d, %Y") if item.created_at else "Unknown"
+        )
+        
+        # Generate PDF with pyppeteer
+        browser = await pyppeteer_launch(
+            headless=True,
+            args=['--no-sandbox', '--disable-setuid-sandbox']
+        )
+        page = await browser.newPage()
+        await page.setContent(html, waitUntil='networkidle0')
+        pdf_bytes = await page.pdf({
+            'format': 'A4',
+            'printBackground': True,
+            'margin': {'top': '2cm', 'bottom': '2cm', 'left': '2cm', 'right': '2cm'}
+        })
+        await browser.close()
+        
+        # Return PDF
+        filename = f"research-report-{run_id[:8]}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
 
 
 @app.get("/api/health")
