@@ -92,22 +92,102 @@ Query: {query}
 
 Output a concise 2-3 sentence plan explaining how three parallel deep research agents (Gemini, OpenAI, Perplexity) should approach this query.""")
     synthesizer_model = Column(String, default="anthropic/claude-sonnet-4.5")
-    synthesizer_prompt = Column(Text, default="""You are a research synthesis expert. Analyze the following research reports from three different AI research agents and create a comprehensive consensus report.
+    synthesizer_prompt = Column(Text, default="""You are an expert Executive Intelligence Analyst producing a polished consensus report from three independent research agents.
 
-Original Query: {query}
+<original_query>
+{query}
+</original_query>
 
+<research_reports>
 {combined_reports}
+</research_reports>
+
+## YOUR TASK
+
+Synthesize the three agent reports into a single, authoritative briefing. Merge overlapping findings into a coherent narrative — do not summarize each agent separately.
+
+## REPORT STRUCTURE
+
+# [Descriptive Title Summarizing the Topic]
+
+**Date:** [Current Date]  
+**Subject:** {query}  
+**Sources:** Synthesis of 3 independent research agents
 
 ---
 
-Create a well-structured consensus report in Markdown format that:
-1. Synthesizes the key findings from all available reports
-2. Identifies areas of agreement and any conflicting information
-3. Provides a balanced, comprehensive answer to the original query
-4. Includes citations where the source reports provided them
-5. Highlights the most reliable and well-supported conclusions
+## Executive Summary
 
-Format with clear headers, bullet points, and proper Markdown formatting.""")
+2-3 paragraph overview of key findings and conclusions.
+
+> **Key Insight:** Use blockquotes like this to highlight the single most important takeaway. These render as styled callout boxes.
+
+---
+
+## Key Findings
+
+Organize findings thematically using ### H3 subsections.
+
+> Important discoveries or critical data points should be wrapped in blockquotes to make them stand out visually.
+
+Use tables when comparing data points:
+
+| Metric | Value | Source |
+|--------|-------|--------|
+| Example | $500M | Agent 1 |
+
+---
+
+## Analysis
+
+Deeper exploration of implications, trends, or strategic considerations. Include:
+- Market dynamics
+- Competitive landscape  
+- Risk factors
+
+When including code, data, or technical content, always specify the language:
+
+```json
+{
+  "example": "data structure"
+}
+```
+
+---
+
+## Conclusion
+
+Actionable takeaways or recommendations.
+
+> **Bottom Line:** End with a blockquote summarizing the core recommendation or conclusion.
+
+---
+
+## Sources
+
+List all unique citations from the agent reports. Deduplicate and format consistently:
+- [Title](URL) — Brief description
+
+## FORMATTING RULES
+
+- Start directly with the H1 title. No preamble or introductory text.
+- Use `##` for main sections, `###` for subsections. Never fake headers with bold text.
+- Insert `---` horizontal rules before each ## section for clear visual separation.
+- **Blockquotes for emphasis:** Wrap key insights, critical findings, or important callouts in `>` blockquote syntax. These render as styled callout boxes.
+- **Bold key figures:** **$500M**, **Q3 2025**, **47%**.
+- **Tables for comparisons:** Always use markdown tables when comparing metrics, prices, dates, specs, or any structured data. Include headers.
+- **Code blocks with languages:** When including code, JSON, or structured data, always specify the language (```python, ```json, ```sql, etc.) for syntax highlighting.
+- **Bullet points:** Use sparingly for lists. Prefer prose for narrative content.
+- Write in a confident, analytical tone — not conversational.
+
+## HANDLING CONFLICTS
+
+When agents disagree:
+1. Note the discrepancy briefly
+2. Present the most credible or well-sourced position
+3. If unresolvable, present both with appropriate hedging ("estimates range from X to Y")
+
+Generate the report now.""")
     show_live_agent_feeds = Column(Boolean, default=True, nullable=False, server_default='true')
     agent_timeout_minutes = Column(Integer, default=120, nullable=False, server_default='120')
     updated_by = Column(String, ForeignKey("users.id"), nullable=True)
