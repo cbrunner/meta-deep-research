@@ -1437,29 +1437,42 @@ function App() {
   const lastRunIdRef = useRef<string | null>(null)
   
   useEffect(() => {
-    if (!isPolling || !runId) return
+    console.log('[SSE] useEffect fired - isPolling:', isPolling, 'runId:', runId)
+    
+    if (!isPolling || !runId) {
+      console.log('[SSE] Early return - isPolling:', isPolling, 'runId:', runId)
+      return
+    }
     
     if (lastRunIdRef.current !== runId) {
       setLiveUpdates([])
       lastRunIdRef.current = runId
     }
     
+    console.log('[SSE] Creating EventSource for:', `/api/stream/${runId}`)
     const eventSource = new EventSource(`/api/stream/${runId}`)
     
+    eventSource.onopen = () => {
+      console.log('[SSE] Connection opened')
+    }
+    
     eventSource.onmessage = (event) => {
+      console.log('[SSE] Message received:', event.data)
       try {
         const data = JSON.parse(event.data) as LiveUpdate
         setLiveUpdates(prev => [...prev, data])
       } catch (err) {
-        console.error('Failed to parse SSE data:', err)
+        console.error('[SSE] Failed to parse SSE data:', err)
       }
     }
     
-    eventSource.onerror = () => {
+    eventSource.onerror = (err) => {
+      console.error('[SSE] Error occurred:', err)
       eventSource.close()
     }
     
     return () => {
+      console.log('[SSE] Cleanup - closing EventSource')
       eventSource.close()
     }
   }, [isPolling, runId])
