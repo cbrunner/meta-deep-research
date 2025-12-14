@@ -511,7 +511,7 @@ function LoginForm({ onSuccess }: { onSuccess: (user: UserData) => void }) {
   )
 }
 
-function AdminSettings({ onClose }: { onClose: () => void }) {
+function AdminSettingsPage({ onBack }: { onBack: () => void }) {
   const [config, setConfig] = useState<AdminConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -570,150 +570,177 @@ function AdminSettings({ onClose }: { onClose: () => void }) {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-gray-800 p-8 rounded-xl">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white flex items-center justify-center">
+        <Loader2 className="w-12 h-12 animate-spin text-purple-500" />
       </div>
     )
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl border border-gray-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-700 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Settings className="w-6 h-6 text-purple-400" />
-            <h2 className="text-xl font-semibold">Admin Settings</h2>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X className="w-6 h-6" />
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <header className="mb-8">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            Back to Dashboard
           </button>
-        </div>
+          <div className="flex items-center gap-3">
+            <Settings className="w-10 h-10 text-purple-500" />
+            <h1 className="text-3xl font-bold">Admin Settings</h1>
+          </div>
+          <p className="text-gray-400 mt-2">Configure research models, prompts, and system behavior</p>
+        </header>
 
-        <div className="p-6 space-y-6">
-          {error && (
-            <div className="p-4 bg-red-500/20 border border-red-500 rounded-lg text-red-400">
-              {error}
+        {error && (
+          <div className="p-4 bg-red-500/20 border border-red-500 rounded-lg text-red-400 mb-6">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="p-4 bg-green-500/20 border border-green-500 rounded-lg text-green-400 mb-6">
+            Configuration saved successfully!
+          </div>
+        )}
+
+        <div className="space-y-8">
+          <section className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+            <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <Brain className="w-5 h-5 text-purple-400" />
+              Research Planning
+            </h2>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Supervisor Model</label>
+                <select
+                  value={config?.supervisor_model || ''}
+                  onChange={(e) => setConfig(c => c ? { ...c, supervisor_model: e.target.value } : null)}
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  {AVAILABLE_MODELS.map(model => (
+                    <option key={model.id} value={model.id}>{model.name} ({model.id})</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Model used to create research plans</p>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Supervisor Prompt</label>
+                <textarea
+                  value={config?.supervisor_prompt || ''}
+                  onChange={(e) => setConfig(c => c ? { ...c, supervisor_prompt: e.target.value } : null)}
+                  rows={8}
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">Use {'{query}'} as a placeholder for the user's research query</p>
+              </div>
             </div>
-          )}
+          </section>
 
-          {success && (
-            <div className="p-4 bg-green-500/20 border border-green-500 rounded-lg text-green-400">
-              Configuration saved successfully!
+          <section className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+            <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-green-400" />
+              Report Synthesis
+            </h2>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Synthesizer Model</label>
+                <select
+                  value={config?.synthesizer_model || ''}
+                  onChange={(e) => setConfig(c => c ? { ...c, synthesizer_model: e.target.value } : null)}
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  {AVAILABLE_MODELS.map(model => (
+                    <option key={model.id} value={model.id}>{model.name} ({model.id})</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Model used to synthesize research reports</p>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Synthesizer Prompt</label>
+                <textarea
+                  value={config?.synthesizer_prompt || ''}
+                  onChange={(e) => setConfig(c => c ? { ...c, synthesizer_prompt: e.target.value } : null)}
+                  rows={10}
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">Use {'{query}'} for the research query and {'{combined_reports}'} for the agent reports</p>
+              </div>
             </div>
-          )}
+          </section>
 
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Supervisor Model</label>
-            <select
-              value={config?.supervisor_model || ''}
-              onChange={(e) => setConfig(c => c ? { ...c, supervisor_model: e.target.value } : null)}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              {AVAILABLE_MODELS.map(model => (
-                <option key={model.id} value={model.id}>{model.name} ({model.id})</option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500 mt-1">Model used to create research plans</p>
-          </div>
+          <section className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+            <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <Cpu className="w-5 h-5 text-blue-400" />
+              Agent Settings
+            </h2>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Agent Timeout (minutes)</label>
+                <input
+                  type="number"
+                  min={5}
+                  max={1440}
+                  value={config?.agent_timeout_minutes || 120}
+                  onChange={(e) => setConfig(c => c ? { ...c, agent_timeout_minutes: parseInt(e.target.value) || 120 } : null)}
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">Maximum time (in minutes) each research agent is allowed to run before timing out. Valid range: 5-1440 minutes (24 hours).</p>
+              </div>
+            </div>
+          </section>
 
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Supervisor Prompt</label>
-            <textarea
-              value={config?.supervisor_prompt || ''}
-              onChange={(e) => setConfig(c => c ? { ...c, supervisor_prompt: e.target.value } : null)}
-              rows={8}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
-            />
-            <p className="text-xs text-gray-500 mt-1">Use {'{query}'} as a placeholder for the user's research query</p>
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Synthesizer Model</label>
-            <select
-              value={config?.synthesizer_model || ''}
-              onChange={(e) => setConfig(c => c ? { ...c, synthesizer_model: e.target.value } : null)}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              {AVAILABLE_MODELS.map(model => (
-                <option key={model.id} value={model.id}>{model.name} ({model.id})</option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500 mt-1">Model used to synthesize research reports</p>
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Synthesizer Prompt</label>
-            <textarea
-              value={config?.synthesizer_prompt || ''}
-              onChange={(e) => setConfig(c => c ? { ...c, synthesizer_prompt: e.target.value } : null)}
-              rows={10}
-              className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
-            />
-            <p className="text-xs text-gray-500 mt-1">Use {'{query}'} for the research query and {'{combined_reports}'} for the agent reports</p>
-          </div>
-
-          <div className="border-t border-gray-700 pt-6">
-            <h3 className="text-lg font-medium text-gray-300 mb-4">Display Settings</h3>
+          <section className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+            <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-yellow-400" />
+              Display Settings
+            </h2>
             <div className="flex items-center justify-between">
               <div>
-                <label className="text-sm text-gray-400">Show Live Agent Feeds</label>
+                <label className="text-sm text-gray-300 font-medium">Show Live Agent Feeds</label>
                 <p className="text-xs text-gray-500 mt-1">Display real-time streaming updates from each research agent during research</p>
               </div>
               <button
                 onClick={() => setConfig(c => c ? { ...c, show_live_agent_feeds: !c.show_live_agent_feeds } : null)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
                   config?.show_live_agent_feeds ? 'bg-purple-600' : 'bg-gray-600'
                 }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
                     config?.show_live_agent_feeds ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
               </button>
             </div>
-          </div>
+          </section>
+        </div>
 
-          <div className="border-t border-gray-700 pt-6">
-            <h3 className="text-lg font-medium text-gray-300 mb-4">Agent Settings</h3>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Agent Timeout (minutes)</label>
-              <input
-                type="number"
-                min={5}
-                max={1440}
-                value={config?.agent_timeout_minutes || 120}
-                onChange={(e) => setConfig(c => c ? { ...c, agent_timeout_minutes: parseInt(e.target.value) || 120 } : null)}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">Maximum time (in minutes) each research agent is allowed to run before timing out. Valid range: 5-1440 minutes (24 hours).</p>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-4 pt-4">
-            <button
-              onClick={onClose}
-              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 flex items-center gap-2"
-            >
-              {saving ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <>
-                  <Save className="w-5 h-5" />
-                  Save Changes
-                </>
-              )}
-            </button>
-          </div>
+        <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-700">
+          <button
+            onClick={onBack}
+            className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            {saving ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                <Save className="w-5 h-5" />
+                Save Changes
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
@@ -940,7 +967,7 @@ function HistoryPanel({ onClose }: { onClose: () => void }) {
 function App() {
   const [user, setUser] = useState<UserData | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [showAdminSettings, setShowAdminSettings] = useState(false)
+  const [currentView, setCurrentView] = useState<'main' | 'admin-settings'>('main')
   const [showHistory, setShowHistory] = useState(false)
   
   const [query, setQuery] = useState('')
@@ -1217,9 +1244,12 @@ function App() {
     )
   }
 
+  if (currentView === 'admin-settings') {
+    return <AdminSettingsPage onBack={() => setCurrentView('main')} />
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
-      {showAdminSettings && <AdminSettings onClose={() => setShowAdminSettings(false)} />}
       {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} />}
       
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -1243,7 +1273,7 @@ function App() {
                 </button>
                 {user.role === 'admin' && (
                   <button
-                    onClick={() => setShowAdminSettings(true)}
+                    onClick={() => setCurrentView('admin-settings')}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
                   >
                     <Settings className="w-4 h-4" />
