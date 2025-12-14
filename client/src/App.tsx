@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save, History, Clock, ChevronLeft, Download, FileText, ExternalLink, Check, Circle } from 'lucide-react'
+import { Search, Loader2, CheckCircle, XCircle, Brain, Sparkles, Globe, Cpu, PlayCircle, X, LogIn, LogOut, Settings, User, Save, History, Clock, ChevronLeft, Download, FileText, ExternalLink, Check, Circle, AlertTriangle, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import axios from 'axios'
 import html2pdf from 'html2pdf.js'
@@ -237,6 +237,16 @@ interface HistoryItem {
   overall_status: string
   created_at: string | null
   completed_at: string | null
+}
+
+interface ActiveJob {
+  run_id: string
+  user_id: string
+  user_email: string
+  query: string
+  started_at: string
+  status: string
+  cancelled: boolean
 }
 
 interface HistoryDetail {
@@ -517,6 +527,9 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([])
+  const [loadingJobs, setLoadingJobs] = useState(true)
+  const [cancellingJob, setCancellingJob] = useState<string | null>(null)
 
   const AVAILABLE_MODELS = [
     { id: 'google/gemini-3-pro-preview', name: 'Google Gemini 3 Pro Preview' },
@@ -528,6 +541,17 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
     { id: 'openai/gpt-5.2', name: 'OpenAI GPT-5.2' },
     { id: 'openai/o3', name: 'OpenAI o3' }
   ]
+
+  const fetchActiveJobs = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/admin/jobs')
+      setActiveJobs(response.data.jobs)
+    } catch (err) {
+      console.error('Failed to fetch active jobs:', err)
+    } finally {
+      setLoadingJobs(false)
+    }
+  }, [])
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -545,7 +569,36 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
       }
     }
     fetchConfig()
-  }, [])
+    fetchActiveJobs()
+    const interval = setInterval(fetchActiveJobs, 5000)
+    return () => clearInterval(interval)
+  }, [fetchActiveJobs])
+
+  const handleCancelJob = async (runId: string) => {
+    setCancellingJob(runId)
+    try {
+      await axios.post(`/api/admin/jobs/${runId}/cancel`)
+      await fetchActiveJobs()
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.detail || 'Failed to cancel job')
+      }
+    } finally {
+      setCancellingJob(null)
+    }
+  }
+
+  const formatTimeAgo = (dateStr: string) => {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `${diffHours}h ago`
+    return `${Math.floor(diffHours / 24)}d ago`
+  }
 
   const handleSave = async () => {
     if (!config) return
@@ -692,6 +745,56 @@ function AdminSettingsPage({ onBack }: { onBack: () => void }) {
                 <p className="text-xs text-gray-500 mt-1">Maximum time (in minutes) each research agent is allowed to run before timing out. Valid range: 5-1440 minutes (24 hours).</p>
               </div>
             </div>
+          </section>
+
+          <section className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+            <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-400" />
+              Active Research Jobs
+            </h2>
+            {loadingJobs ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              </div>
+            ) : activeJobs.length === 0 ? (
+              <p className="text-gray-500 text-sm">No active research jobs</p>
+            ) : (
+              <div className="space-y-3">
+                {activeJobs.map(job => (
+                  <div key={job.run_id} className={`p-4 rounded-lg border ${job.cancelled ? 'bg-red-900/20 border-red-800' : 'bg-gray-700/50 border-gray-600'}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-mono text-gray-400">{job.run_id.slice(0, 8)}...</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${job.cancelled ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                            {job.cancelled ? 'Cancelled' : job.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-300 truncate">{job.query}</p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                          <span>{job.user_email}</span>
+                          <span>{formatTimeAgo(job.started_at)}</span>
+                        </div>
+                      </div>
+                      {!job.cancelled && (
+                        <button
+                          onClick={() => handleCancelJob(job.run_id)}
+                          disabled={cancellingJob === job.run_id}
+                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg text-sm font-medium flex items-center gap-1.5 shrink-0"
+                        >
+                          {cancellingJob === job.run_id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
