@@ -1437,7 +1437,7 @@ function App() {
   const lastRunIdRef = useRef<string | null>(null)
   
   useEffect(() => {
-    if (!isPolling || !runId || !showLiveFeed) return
+    if (!isPolling || !runId) return
     
     if (lastRunIdRef.current !== runId) {
       setLiveUpdates([])
@@ -1462,7 +1462,7 @@ function App() {
     return () => {
       eventSource.close()
     }
-  }, [isPolling, runId, showLiveFeed])
+  }, [isPolling, runId])
 
   const handleLogout = async () => {
     try {
