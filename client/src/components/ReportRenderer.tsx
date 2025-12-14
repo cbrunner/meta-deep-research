@@ -24,18 +24,21 @@ export const ReportRenderer: React.FC<ReportRendererProps> = ({ content, classNa
   return (
     <article 
       className={`
-        prose prose-slate lg:prose-lg dark:prose-invert 
+        prose prose-invert lg:prose-lg
         max-w-none
         prose-headings:font-semibold 
         prose-headings:tracking-tight
-        prose-h1:text-3xl prose-h1:border-b prose-h1:border-slate-200 prose-h1:pb-4 prose-h1:mb-8
-        prose-h2:text-2xl prose-h2:mt-12 prose-h2:mb-6
-        prose-h3:text-xl prose-h3:mt-8 prose-h3:mb-4
-        prose-p:leading-relaxed
-        prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline
+        prose-headings:text-gray-100
+        prose-h1:text-3xl prose-h1:border-b prose-h1:border-gray-600 prose-h1:pb-4 prose-h1:mb-8
+        prose-h2:text-2xl prose-h2:mt-12 prose-h2:mb-6 prose-h2:text-gray-200
+        prose-h3:text-xl prose-h3:mt-8 prose-h3:mb-4 prose-h3:text-gray-200
+        prose-p:leading-relaxed prose-p:text-gray-300
+        prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline hover:prose-a:text-blue-300
         prose-blockquote:not-italic prose-blockquote:font-normal
         prose-img:rounded-xl prose-img:shadow-lg
-        prose-hr:border-slate-300
+        prose-hr:border-gray-600
+        prose-strong:text-gray-100
+        prose-li:text-gray-300
         ${className}
       `}
     >
@@ -58,7 +61,7 @@ export const ReportRenderer: React.FC<ReportRendererProps> = ({ content, classNa
               </SyntaxHighlighter>
             ) : (
               <code 
-                className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-sm font-mono" 
+                className="bg-gray-800 text-pink-400 px-1.5 py-0.5 rounded text-sm font-mono" 
                 {...props}
               >
                 {children}
@@ -70,7 +73,7 @@ export const ReportRenderer: React.FC<ReportRendererProps> = ({ content, classNa
               href={href} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium inline-flex items-center gap-1"
+              className="text-blue-400 hover:text-blue-300 font-medium inline-flex items-center gap-1"
             >
               {children}
               <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -79,36 +82,36 @@ export const ReportRenderer: React.FC<ReportRendererProps> = ({ content, classNa
             </a>
           ),
           table: ({ children }: any) => (
-            <div className="overflow-x-auto my-8 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
-              <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+            <div className="overflow-x-auto my-8 rounded-lg border border-gray-600 shadow-sm">
+              <table className="min-w-full divide-y divide-gray-600">
                 {children}
               </table>
             </div>
           ),
           thead: ({ children }: any) => (
-            <thead className="bg-slate-50 dark:bg-slate-800">
+            <thead className="bg-gray-800">
               {children}
             </thead>
           ),
           th: ({ children }: any) => (
-            <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-100">
               {children}
             </th>
           ),
           td: ({ children }: any) => (
-            <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+            <td className="px-4 py-3 text-sm text-gray-300 border-t border-gray-600">
               {children}
             </td>
           ),
           blockquote: ({ children }: any) => (
-            <blockquote className="border-l-4 border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30 rounded-r-lg p-4 my-6 not-italic">
-              <div className="text-indigo-900 dark:text-indigo-200">
+            <blockquote className="border-l-4 border-indigo-500 bg-indigo-500/10 rounded-r-lg p-4 my-6 not-italic">
+              <div className="text-indigo-200">
                 {children}
               </div>
             </blockquote>
           ),
           hr: () => (
-            <hr className="my-12 border-t-2 border-slate-200 dark:border-slate-700" />
+            <hr className="my-12 border-t-2 border-gray-600" />
           ),
           ul: ({ children }: any) => (
             <ul className="my-4 space-y-2 list-disc list-outside pl-6">
@@ -121,7 +124,7 @@ export const ReportRenderer: React.FC<ReportRendererProps> = ({ content, classNa
             </ol>
           ),
           li: ({ children }: any) => (
-            <li className="pl-2">
+            <li className="pl-2 text-gray-300">
               {children}
             </li>
           ),
