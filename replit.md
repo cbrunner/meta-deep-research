@@ -73,6 +73,7 @@ Admins can configure:
 - **Synthesizer Prompt**: Prompt template for synthesizing consensus reports (use `{query}` for the original query and `{combined_reports}` for the agent reports)
 - **Show Live Agent Feeds**: Toggle to display real-time streaming updates from each research agent during research
 - **Agent Timeout (minutes)**: Maximum time each research agent is allowed to run before timing out (default: 120 minutes, range: 5-1440 minutes)
+- **Active Research Jobs**: View all currently running research jobs with user email, query preview, and start time. Admins can cancel any running job.
 
 ## Live Agent Status Streaming
 
@@ -104,6 +105,8 @@ Available models via OpenRouter:
 ### Admin (requires admin role)
 - `GET /api/admin/config` - Get supervisor configuration
 - `PATCH /api/admin/config` - Update supervisor configuration
+- `GET /api/admin/jobs` - Get list of active research jobs
+- `POST /api/admin/jobs/{run_id}/cancel` - Cancel an active research job
 
 ### Research (requires authentication)
 - `POST /api/research` - Create a research plan (requires approval)

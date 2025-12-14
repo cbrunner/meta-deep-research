@@ -390,6 +390,12 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
     if run_id:
         emit_live_update(run_id, "openai", "status", {"step": "starting", "message": "Initializing OpenAI Deep Research..."})
     
+    if run_id and is_job_cancelled(run_id):
+        openai_data["status"] = "failed"
+        openai_data["error"] = "Cancelled by admin"
+        print(f"[OPENAI] CANCELLED by admin (pre-flight)")
+        return {**state, "openai_data": openai_data}
+    
     if not AI_INTEGRATIONS_OPENROUTER_API_KEY or not AI_INTEGRATIONS_OPENROUTER_BASE_URL:
         openai_data["status"] = "failed"
         openai_data["error"] = "OpenRouter not configured"
@@ -487,6 +493,12 @@ async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
     
     if run_id:
         emit_live_update(run_id, "perplexity", "status", {"step": "starting", "message": "Initializing Perplexity Deep Research..."})
+    
+    if run_id and is_job_cancelled(run_id):
+        perplexity_data["status"] = "failed"
+        perplexity_data["error"] = "Cancelled by admin"
+        print(f"[PERPLEXITY] CANCELLED by admin (pre-flight)")
+        return {**state, "perplexity_data": perplexity_data}
     
     if not PERPLEXITY_API_KEY:
         perplexity_data["status"] = "failed"
