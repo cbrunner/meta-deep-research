@@ -363,7 +363,7 @@ Output a concise 2-3 sentence plan explaining how three parallel deep research a
 
 async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
     """Submit research job to Gemini Deep Research using Interactions API with polling."""
-    query = state["user_query"]
+    query = state["research_plan"] if state.get("research_plan") else state["user_query"]
     run_id = state.get("run_id")
     gemini_data = state["gemini_data"].copy()
     
@@ -493,7 +493,7 @@ async def gemini_submit_node(state: MetaResearchState) -> MetaResearchState:
 
 async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
     """Submit research job to OpenAI o3 Deep Research via OpenRouter."""
-    query = state["user_query"]
+    query = state["research_plan"] if state.get("research_plan") else state["user_query"]
     run_id = state.get("run_id")
     openai_data = state["openai_data"].copy()
     
@@ -618,7 +618,7 @@ async def openai_submit_node(state: MetaResearchState) -> MetaResearchState:
 
 async def perplexity_submit_node(state: MetaResearchState) -> MetaResearchState:
     """Submit research job to Perplexity Sonar Deep Research."""
-    query = state["user_query"]
+    query = state["research_plan"] if state.get("research_plan") else state["user_query"]
     run_id = state.get("run_id")
     perplexity_data = state["perplexity_data"].copy()
     
