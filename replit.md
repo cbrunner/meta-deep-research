@@ -72,6 +72,7 @@ Admins can configure:
 - **Synthesizer Model**: Model used to synthesize research reports (via OpenRouter)
 - **Synthesizer Prompt**: Prompt template for synthesizing consensus reports (use `{query}` for the original query and `{combined_reports}` for the agent reports)
 - **Show Live Agent Feeds**: Toggle to display real-time streaming updates from each research agent during research
+- **Agent Timeout (minutes)**: Maximum time each research agent is allowed to run before timing out (default: 120 minutes, range: 5-1440 minutes)
 
 ## Live Agent Status Streaming
 
