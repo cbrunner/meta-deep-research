@@ -1075,6 +1075,7 @@ function HistoryPanel({ onClose }: { onClose: () => void }) {
   const [selectedItem, setSelectedItem] = useState<HistoryDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
+  const [loadingPDF, setLoadingPDF] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -1145,8 +1146,10 @@ function HistoryPanel({ onClose }: { onClose: () => void }) {
   }
 
   const handleDownloadPDF = async () => {
-    if (!selectedItem?.run_id) return
+    if (!selectedItem?.run_id || loadingPDF) return
     
+    setLoadingPDF(true)
+    setError(null)
     try {
       const response = await axios.get(`/api/research/${selectedItem.run_id}/pdf`, {
         responseType: 'blob'
@@ -1163,6 +1166,9 @@ function HistoryPanel({ onClose }: { onClose: () => void }) {
       window.URL.revokeObjectURL(url)
     } catch (err) {
       console.error('PDF download failed:', err)
+      setError('Failed to generate PDF. Please try again.')
+    } finally {
+      setLoadingPDF(false)
     }
   }
 
@@ -1256,10 +1262,15 @@ function HistoryPanel({ onClose }: { onClose: () => void }) {
                       </button>
                       <button
                         onClick={handleDownloadPDF}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm transition-colors"
+                        disabled={loadingPDF}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm transition-colors"
                       >
-                        <FileText className="w-4 h-4" />
-                        PDF
+                        {loadingPDF ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <FileText className="w-4 h-4" />
+                        )}
+                        {loadingPDF ? 'Generating...' : 'PDF'}
                       </button>
                     </div>
                   </div>
@@ -1361,6 +1372,7 @@ function App() {
   
   const [liveUpdates, setLiveUpdates] = useState<LiveUpdate[]>([])
   const [showLiveFeed, setShowLiveFeed] = useState(true)
+  const [loadingPDF, setLoadingPDF] = useState(false)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -1600,8 +1612,10 @@ function App() {
   }
 
   const handleDownloadPDF = async () => {
-    if (!status?.run_id) return
+    if (!status?.run_id || loadingPDF) return
     
+    setLoadingPDF(true)
+    setError(null)
     try {
       const response = await axios.get(`/api/research/${status.run_id}/pdf`, {
         responseType: 'blob'
@@ -1618,6 +1632,9 @@ function App() {
       window.URL.revokeObjectURL(url)
     } catch (err) {
       console.error('PDF download failed:', err)
+      setError('Failed to generate PDF. Please try again.')
+    } finally {
+      setLoadingPDF(false)
     }
   }
 
