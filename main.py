@@ -1748,13 +1748,20 @@ async def generate_pdf(
             md = markdown.Markdown(extensions=['tables', 'fenced_code', 'toc'])
             content_html = md.convert(item.consensus_report)
             
-            # Parse citations from JSON if stored
+            # Extract citations from agent outputs
             citations = []
-            if item.citations:
-                try:
-                    citations = json.loads(item.citations) if isinstance(item.citations, str) else item.citations
-                except:
-                    pass
+            seen_urls = set()
+            for agent_output, agent_name in [
+                (item.gemini_output, "Gemini"),
+                (item.openai_output, "OpenAI"),
+                (item.perplexity_output, "Perplexity")
+            ]:
+                if agent_output:
+                    agent_citations = extract_citations_from_markdown(agent_output, agent_name)
+                    for citation in agent_citations:
+                        if citation["url"] not in seen_urls:
+                            seen_urls.add(citation["url"])
+                            citations.append(citation)
             
             # Render template
             env = Environment(loader=FileSystemLoader('templates'))
