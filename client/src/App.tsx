@@ -295,8 +295,15 @@ function AgentCard({
   
   const agentUpdates = liveUpdates?.filter(u => u.agent === agentType) || []
   
+  const hasCompletedUpdate = agentUpdates.some(u => u.type === 'completed')
+  const hasErrorUpdate = agentUpdates.some(u => u.type === 'error')
+  
+  const effectiveStatus = hasCompletedUpdate ? 'completed' : 
+                          hasErrorUpdate ? 'failed' : 
+                          data.status
+  
   const getStatusStyles = () => {
-    switch (data.status) {
+    switch (effectiveStatus) {
       case 'idle':
         return 'opacity-50 border-gray-600'
       case 'polling':
@@ -311,7 +318,7 @@ function AgentCard({
   }
   
   const getStatusIcon = () => {
-    switch (data.status) {
+    switch (effectiveStatus) {
       case 'idle':
         return <Icon className="w-6 h-6 text-gray-400" />
       case 'polling':
@@ -326,7 +333,7 @@ function AgentCard({
   }
   
   const getStatusText = () => {
-    switch (data.status) {
+    switch (effectiveStatus) {
       case 'idle':
         return 'Waiting for assignment'
       case 'polling':
@@ -365,9 +372,9 @@ function AgentCard({
           <h3 className="font-semibold text-lg">{name}</h3>
         </div>
         <span className={`text-sm px-2 py-1 rounded-full ${
-          data.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-          data.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-          data.status === 'polling' ? `bg-${color}-500/20 text-${color}-400` :
+          effectiveStatus === 'completed' ? 'bg-green-500/20 text-green-400' :
+          effectiveStatus === 'failed' ? 'bg-red-500/20 text-red-400' :
+          effectiveStatus === 'polling' ? `bg-${color}-500/20 text-${color}-400` :
           'bg-gray-700 text-gray-400'
         }`}>
           {getStatusText()}
@@ -384,7 +391,7 @@ function AgentCard({
       
       {renderLiveFeed()}
       
-      {data.status === 'completed' && data.output && (
+      {effectiveStatus === 'completed' && data.output && (
         <div className="mt-3">
           <button 
             onClick={() => setShowRaw(!showRaw)}
