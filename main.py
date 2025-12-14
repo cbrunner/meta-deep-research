@@ -1109,10 +1109,40 @@ async def get_admin_jobs(user: User = Depends(require_admin)):
 
 
 @app.post("/api/admin/jobs/{run_id}/cancel")
-async def cancel_admin_job(run_id: str, user: User = Depends(require_admin)):
+async def cancel_admin_job(run_id: str, user: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Cancel an active research job (admin only)."""
-    if cancel_job(run_id):
-        emit_live_update(run_id, "system", "cancelled", {"message": "Cancelled by admin", "admin_email": user.email})
+    job_found = cancel_job(run_id)
+    
+    result = await db.execute(
+        select(ResearchHistory).where(ResearchHistory.run_id == run_id)
+    )
+    history = result.scalar_one_or_none()
+    if history:
+        history.overall_status = "cancelled"
+        history.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        print(f"Updated ResearchHistory for {run_id} to cancelled")
+    
+    try:
+        config = {"configurable": {"thread_id": run_id}}
+        research_state = await research_graph.aget_state(config)
+        if research_state.values and research_state.values.get("overall_status") == "researching":
+            updated_state = dict(research_state.values)
+            updated_state["overall_status"] = "cancelled"
+            updated_state["gemini_data"] = {**updated_state.get("gemini_data", {}), "status": "failed", "error": "Cancelled by admin"}
+            updated_state["openai_data"] = {**updated_state.get("openai_data", {}), "status": "failed", "error": "Cancelled by admin"}
+            updated_state["perplexity_data"] = {**updated_state.get("perplexity_data", {}), "status": "failed", "error": "Cancelled by admin"}
+            await research_graph.aupdate_state(config, updated_state)
+            print(f"Updated LangGraph state for {run_id} to cancelled")
+    except Exception as e:
+        print(f"Error updating LangGraph state for {run_id}: {e}")
+    
+    unregister_active_job(run_id)
+    cleanup_live_updates(run_id)
+    
+    emit_live_update(run_id, "system", "cancelled", {"message": "Cancelled by admin", "admin_email": user.email})
+    
+    if job_found or history:
         return {"message": f"Job {run_id} has been cancelled", "run_id": run_id}
     raise HTTPException(status_code=404, detail="Job not found or already completed")
 
