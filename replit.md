@@ -35,6 +35,8 @@ This application provides a unified research orchestration system that:
 ├── main.py                 # FastAPI server + LangGraph definition + auth endpoints
 ├── database.py             # SQLAlchemy models (User, Session, SupervisorConfig)
 ├── auth.py                 # Authentication utilities and dependencies
+├── templates/
+│   └── pdf_report.html     # Print-optimized HTML template for PDF generation
 ├── client/
 │   ├── src/
 │   │   ├── App.tsx        # Main React component with login UI + admin settings
@@ -161,6 +163,7 @@ Available models via OpenRouter:
 ### History (requires authentication)
 - `GET /api/research/history` - Get user's research history (paginated, reverse chronological)
 - `GET /api/research/history/{id}` - Get full details of a specific research
+- `GET /api/research/{run_id}/pdf` - Generate and download PDF of research report (uses Puppeteer)
 
 ### Other
 - `GET /api/health` - Health check with API key configuration status
