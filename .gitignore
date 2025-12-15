@@ -256,3 +256,4 @@ client/.env
 replit_state.db
 .replit
 replit.nix
+attached_assets/
